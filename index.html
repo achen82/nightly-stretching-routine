@@ -1523,6 +1523,7 @@ function renderPlan(){
   budgetRange.max = String(maxSec);
   var val = (typeof planBudgetSec === "number") ? planBudgetSec : maxSec;
   val = Math.max(300, Math.min(maxSec, Math.round(val / 30) * 30));
+  if(val >= maxSec - 30) val = maxSec; /* top of the slider always means the full routine, even when its total is not a multiple of 30s */
   budgetRange.value = String(val);
   planBudgetSec = val;
   budgetLabel.textContent = fmt(val);
