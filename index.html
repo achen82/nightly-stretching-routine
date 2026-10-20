@@ -219,7 +219,7 @@
   .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px; }
   .form-grid label{ font-size:13px; font-weight:700; display:block; }
   .form-grid input, .form-grid select{
-    width:100%; margin-top:4px; font:inherit; font-size:15px; padding:10px;
+    width:100%; margin-top:4px; font:inherit; font-size:16px; padding:12px;
     border:1.5px solid var(--line); border-radius:10px; background:var(--surface); color:var(--ink);
   }
   .form-wide{ grid-column:1 / -1; }
@@ -232,12 +232,17 @@
   }
   .del-step-btn[data-armed="1"]{ background:var(--danger); color:#fff; width:auto; padding:0 8px; font-size:12px; }
   .rename-input{
-    width:100%; font:inherit; font-weight:700; font-size:15px; padding:8px;
-    border:1.5px solid var(--accent); border-radius:9px; background:var(--surface); color:var(--ink);
+    width:100%; font:inherit; font-weight:700; font-size:17px; padding:14px 12px; min-height:54px;
+    border:2px solid var(--accent); border-radius:12px; background:var(--surface); color:var(--ink);
+  }
+  .rename-row button{ flex:1; min-height:52px; font-size:16px; }
+  .side-chip{
+    display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; vertical-align:2px;
+    background:var(--accent-soft); color:var(--ink); font-size:11px; font-weight:800; letter-spacing:.08em;
   }
   .step-name-input{
-    width:100%; font:inherit; font-weight:700; font-size:15px; color:var(--ink);
-    border:none; border-bottom:1.5px dashed var(--line); background:transparent; padding:2px 0; border-radius:0;
+    width:100%; font:inherit; font-weight:700; font-size:16px; color:var(--ink); min-height:40px;
+    border:none; border-bottom:1.5px dashed var(--line); background:transparent; padding:8px 0; border-radius:0;
   }
   @media (max-width:380px){ .countdown{ font-size:88px; } .ex-name{ font-size:24px; } }
 </style>
@@ -340,7 +345,7 @@
 
     <div class="card">
       <h2>Add an exercise</h2>
-      <p>New exercises default to <strong>30 seconds</strong> &mdash; change the duration here, or later in Steps &amp; Settings.</p>
+      <p>New exercises default to <strong>30 seconds</strong> &mdash; change the duration here, or later in Steps &amp; Settings. For a left/right pair, just type the base name: &ldquo;&mdash; right&rdquo; and &ldquo;&mdash; left&rdquo; are added automatically, and pairs always start on the right.</p>
       <div class="form-grid">
         <div class="form-wide"><label for="newName">Name</label><input id="newName" type="text" placeholder="e.g. Pigeon stretch" autocomplete="off"></div>
         <div><label for="newSeconds">Duration (sec)</label><input id="newSeconds" type="number" min="5" max="600" step="5" value="30"></div>
@@ -393,35 +398,35 @@
 var TRANSITION_SECONDS = 5;
 
 var DEFAULT_STEPS = [
-  {id:"s1",  group:"g-calf", phase:"Roll / massage", name:"Calf rolling — left", seconds:30, cue:"Roll calf muscle from above the Achilles to below the knee; rotate leg to cover angles; avoid knee crease."},
-  {id:"s2",  group:"g-calf", phase:"Roll / massage", name:"Calf rolling — right", seconds:30, cue:"Same as left; do not press directly on the Achilles tendon."},
-  {id:"s33", group:"g-backcalf", phase:"Roll / massage", name:"Back of calf rollout — left", seconds:30, cue:"Second, slower pass over the back of the calf, above the Achilles to below the knee; avoid the knee crease."},
-  {id:"s34", group:"g-backcalf", phase:"Roll / massage", name:"Back of calf rollout — right", seconds:30, cue:"Same as left; do not press directly on the Achilles tendon."},
+  {id:"s2",  group:"g-calf", phase:"Roll / massage", name:"Calf rolling — right", seconds:30, cue:"Roll calf muscle from above the Achilles to below the knee; rotate leg to cover angles; avoid knee crease. Do not press directly on the Achilles tendon."},
+  {id:"s1",  group:"g-calf", phase:"Roll / massage", name:"Calf rolling — left", seconds:30, cue:"Same as right."},
+  {id:"s34", group:"g-backcalf", phase:"Roll / massage", name:"Back of calf rollout — right", seconds:30, cue:"Second, slower pass over the back of the calf, above the Achilles to below the knee; avoid the knee crease. Do not press directly on the Achilles tendon."},
+  {id:"s33", group:"g-backcalf", phase:"Roll / massage", name:"Back of calf rollout — left", seconds:30, cue:"Same as right."},
   {id:"s3",  group:"g-quad", phase:"Roll / massage", name:"Quad rolling", seconds:60, cue:"Use Roll Recovery R8 or foam roller. Roll both quads, staying on the muscle — not the kneecap or tendons."},
-  {id:"s31", group:"g-itband", phase:"Roll / massage", name:"IT band rollout — left", seconds:30, cue:"Foam roll the outer thigh from hip toward knee in slow passes; keep pressure tolerable and stop above the knee."},
-  {id:"s32", group:"g-itband", phase:"Roll / massage", name:"IT band rollout — right", seconds:30, cue:"Same as left."},
-  {id:"s5",  group:"g-glute", phase:"Roll / massage", name:"Tennis ball — upper-outer left glute", seconds:30, cue:"Target the fleshy upper-outer glute near—but not directly on—the hip bone."},
-  {id:"s6",  group:"g-glute", phase:"Roll / massage", name:"Tennis ball — upper-outer right glute", seconds:30, cue:"Same as left. Use tolerable, moderate pressure."},
-  {id:"s7",  group:"g-glute", phase:"Roll / massage", name:"Tennis ball — deeper left glute", seconds:30, cue:"Target the fleshy buttock area using gentle pressure; avoid sharp, radiating, or tingling sensations."},
-  {id:"s8",  group:"g-glute", phase:"Roll / massage", name:"Tennis ball — deeper right glute", seconds:30, cue:"Same as left. Do not press directly on bony points or the sciatic nerve pathway."},
-  {id:"s9",  group:"g-couch", phase:"Floor stretches / mobility", name:"Couch stretch — left", seconds:45, cue:"Quad and hip flexor. Keep pelvis gently tucked, without arching the lower back."},
-  {id:"s10", group:"g-couch", phase:"Floor stretches / mobility", name:"Couch stretch — right", seconds:45, cue:"Same as left. Ease off if front-of-knee pressure is uncomfortable."},
-  {id:"s11", group:"g-pretzel", phase:"Floor stretches / mobility", name:"Pretzel stretch — left", seconds:30, cue:"Use your preferred pretzel variation; gentle glute/hip stretch without forcing the spine."},
-  {id:"s12", group:"g-pretzel", phase:"Floor stretches / mobility", name:"Pretzel stretch — right", seconds:30, cue:"Same as left."},
-  {id:"s13", group:"g-fig4", phase:"Floor stretches / mobility", name:"Figure-four stretch — left", seconds:30, cue:"Gentle deep-glute/hip stretch; don’t force the knee."},
-  {id:"s14", group:"g-fig4", phase:"Floor stretches / mobility", name:"Figure-four stretch — right", seconds:30, cue:"Same as left."},
+  {id:"s32", group:"g-itband", phase:"Roll / massage", name:"IT band rollout — right", seconds:30, cue:"Foam roll the outer thigh from hip toward knee in slow passes; keep pressure tolerable and stop above the knee."},
+  {id:"s31", group:"g-itband", phase:"Roll / massage", name:"IT band rollout — left", seconds:30, cue:"Same as right."},
+  {id:"s6",  group:"g-glute", phase:"Roll / massage", name:"Tennis ball — upper-outer right glute", seconds:30, cue:"Target the fleshy upper-outer glute near—but not directly on—the hip bone. Use tolerable, moderate pressure."},
+  {id:"s5",  group:"g-glute", phase:"Roll / massage", name:"Tennis ball — upper-outer left glute", seconds:30, cue:"Same as right."},
+  {id:"s8",  group:"g-glute", phase:"Roll / massage", name:"Tennis ball — deeper right glute", seconds:30, cue:"Target the fleshy buttock area using gentle pressure; avoid sharp, radiating, or tingling sensations. Do not press directly on bony points or the sciatic nerve pathway."},
+  {id:"s7",  group:"g-glute", phase:"Roll / massage", name:"Tennis ball — deeper left glute", seconds:30, cue:"Same as right."},
+  {id:"s10", group:"g-couch", phase:"Floor stretches / mobility", name:"Couch stretch — right", seconds:45, cue:"Quad and hip flexor. Keep pelvis gently tucked, without arching the lower back. Ease off if front-of-knee pressure is uncomfortable."},
+  {id:"s9",  group:"g-couch", phase:"Floor stretches / mobility", name:"Couch stretch — left", seconds:45, cue:"Same as right."},
+  {id:"s12", group:"g-pretzel", phase:"Floor stretches / mobility", name:"Pretzel stretch — right", seconds:30, cue:"Use your preferred pretzel variation; gentle glute/hip stretch without forcing the spine."},
+  {id:"s11", group:"g-pretzel", phase:"Floor stretches / mobility", name:"Pretzel stretch — left", seconds:30, cue:"Same as right."},
+  {id:"s14", group:"g-fig4", phase:"Floor stretches / mobility", name:"Figure-four stretch — right", seconds:30, cue:"Gentle deep-glute/hip stretch; don’t force the knee."},
+  {id:"s13", group:"g-fig4", phase:"Floor stretches / mobility", name:"Figure-four stretch — left", seconds:30, cue:"Same as right."},
   {id:"s15", group:"g-hamstring", phase:"Floor stretches / mobility", name:"Hamstring stretch", seconds:60, cue:"Relaxed position with a small knee bend if needed; cover both legs evenly, no bouncing."},
   {id:"s17", group:"g-butterfly", phase:"Floor stretches / mobility", name:"Butterfly stretch", seconds:45, cue:"Feet together, knees gently toward floor; focus on inner thighs, without pressing on knees."},
-  {id:"s29", group:"g-neckknot", phase:"Floor stretches / mobility", name:"Back of neck knot — left", seconds:30, cue:"Lying on your back, tennis ball under the base of the skull on the left side; small gentle nods, comfortable pressure only."},
-  {id:"s30", group:"g-neckknot", phase:"Floor stretches / mobility", name:"Back of neck knot — right", seconds:30, cue:"Same as left."},
-  {id:"s20", group:"g-straightcalf", phase:"Wall / doorway finish", name:"Straight-knee calf stretch — left", seconds:30, cue:"Emphasize gastrocnemius; heel down, knee straight but not locked."},
-  {id:"s21", group:"g-straightcalf", phase:"Wall / doorway finish", name:"Straight-knee calf stretch — right", seconds:30, cue:"Same as left."},
-  {id:"s22", group:"g-bentcalf", phase:"Wall / doorway finish", name:"Bent-knee calf stretch — left", seconds:30, cue:"Emphasize soleus; heel stays down as knee bends gently."},
-  {id:"s23", group:"g-bentcalf", phase:"Wall / doorway finish", name:"Bent-knee calf stretch — right", seconds:30, cue:"Same as left."},
-  {id:"s24", group:"g-chest", phase:"Wall / doorway finish", name:"Doorway chest stretch — left", seconds:30, cue:"Gentle chest/front-shoulder opening; avoid overstretching shoulder."},
-  {id:"s25", group:"g-chest", phase:"Wall / doorway finish", name:"Doorway chest stretch — right", seconds:30, cue:"Same as left."},
-  {id:"s26", group:"g-neck", phase:"Wall / doorway finish", name:"Upper-trap neck stretch — left", seconds:30, cue:"Gentle ear-to-shoulder tilt; avoid pulling hard on head."},
-  {id:"s27", group:"g-neck", phase:"Wall / doorway finish", name:"Upper-trap neck stretch — right", seconds:30, cue:"Same as left."},
+  {id:"s30", group:"g-neckknot", phase:"Floor stretches / mobility", name:"Back of neck knot — right", seconds:30, cue:"Lying on your back, tennis ball under the base of the skull on the right side; small gentle nods, comfortable pressure only."},
+  {id:"s29", group:"g-neckknot", phase:"Floor stretches / mobility", name:"Back of neck knot — left", seconds:30, cue:"Same as right."},
+  {id:"s21", group:"g-straightcalf", phase:"Wall / doorway finish", name:"Straight-knee calf stretch — right", seconds:30, cue:"Emphasize gastrocnemius; heel down, knee straight but not locked."},
+  {id:"s20", group:"g-straightcalf", phase:"Wall / doorway finish", name:"Straight-knee calf stretch — left", seconds:30, cue:"Same as right."},
+  {id:"s23", group:"g-bentcalf", phase:"Wall / doorway finish", name:"Bent-knee calf stretch — right", seconds:30, cue:"Emphasize soleus; heel stays down as knee bends gently."},
+  {id:"s22", group:"g-bentcalf", phase:"Wall / doorway finish", name:"Bent-knee calf stretch — left", seconds:30, cue:"Same as right."},
+  {id:"s25", group:"g-chest", phase:"Wall / doorway finish", name:"Doorway chest stretch — right", seconds:30, cue:"Gentle chest/front-shoulder opening; avoid overstretching shoulder."},
+  {id:"s24", group:"g-chest", phase:"Wall / doorway finish", name:"Doorway chest stretch — left", seconds:30, cue:"Same as right."},
+  {id:"s27", group:"g-neck", phase:"Wall / doorway finish", name:"Upper-trap neck stretch — right", seconds:30, cue:"Gentle ear-to-shoulder tilt; avoid pulling hard on head."},
+  {id:"s26", group:"g-neck", phase:"Wall / doorway finish", name:"Upper-trap neck stretch — left", seconds:30, cue:"Same as right."},
   {id:"s28", group:"g-chin", phase:"Wall / doorway finish", name:"Chin tucks", seconds:30, cue:"About five slow, controlled reps; move straight back rather than looking downward."}
 ];
 
@@ -1052,16 +1057,26 @@ function buildStepsEditor(){
     var nm = document.createElement("input");
     nm.className = "step-name-input";
     nm.type = "text";
-    nm.value = step.name;
-    nm.setAttribute("aria-label", "Step name (editable)");
+    var sideSuffix = "";
+    if(/ — left$/.test(step.name)) sideSuffix = " — left";
+    else if(/ — right$/.test(step.name)) sideSuffix = " — right";
+    nm.value = sideSuffix ? step.name.slice(0, step.name.length - sideSuffix.length) : step.name;
+    nm.setAttribute("aria-label", "Step name (editable, base name only)");
     nm.addEventListener("change", function(){
       var v = nm.value.trim();
-      if(!v){ nm.value = step.name; return; }
-      if(v !== step.name){ step.name = v; onRoutineEdited(); }
+      if(!v){ nm.value = sideSuffix ? step.name.slice(0, step.name.length - sideSuffix.length) : step.name; return; }
+      if(v + sideSuffix !== step.name){ step.name = v + sideSuffix; onRoutineEdited(); }
     });
     var meta = document.createElement("div");
     meta.className = "step-meta"; meta.textContent = fmt(step.seconds) + " · " + step.cue;
-    main.appendChild(nm); main.appendChild(meta);
+    main.appendChild(nm);
+    if(sideSuffix){
+      var chip = document.createElement("span");
+      chip.className = "side-chip";
+      chip.textContent = sideSuffix === " — left" ? "LEFT" : "RIGHT";
+      main.appendChild(chip);
+    }
+    main.appendChild(meta);
     row.appendChild(main);
 
     var dur = document.createElement("div");
@@ -1422,7 +1437,7 @@ function groupCard(g){
     nm.parentNode.replaceChild(input, nm);
     ctl.classList.add("hidden");
     var row = document.createElement("div");
-    row.className = "gcard-ctl";
+    row.className = "gcard-ctl rename-row";
     var saveB = document.createElement("button");
     saveB.textContent = "Save name";
     saveB.addEventListener("click", function(){ renameGroup(g.id, input.value); });
@@ -1588,8 +1603,8 @@ document.getElementById("btnAddExercise").addEventListener("click", function(){
   }
   var fresh = [];
   if(sides === "pair"){
-    fresh.push({id:gid + "-l", group:gid, phase:phase, name:name + " — left", seconds:secs, cue:"Custom exercise.", enabled:true});
-    fresh.push({id:gid + "-r", group:gid, phase:phase, name:name + " — right", seconds:secs, cue:"Same as left.", enabled:true});
+    fresh.push({id:gid + "-r", group:gid, phase:phase, name:name + " — right", seconds:secs, cue:"Custom exercise.", enabled:true});
+    fresh.push({id:gid + "-l", group:gid, phase:phase, name:name + " — left", seconds:secs, cue:"Same as right.", enabled:true});
   }else{
     fresh.push({id:gid + "-1", group:gid, phase:phase, name:name, seconds:secs, cue:"Custom exercise.", enabled:true});
   }
