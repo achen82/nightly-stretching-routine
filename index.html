@@ -223,6 +223,14 @@
     border:1.5px solid var(--line); border-radius:10px; background:var(--surface); color:var(--ink);
   }
   .form-wide{ grid-column:1 / -1; }
+  .gcard-ctl .del-btn{ color:var(--danger); border-color:var(--danger); }
+  .gcard-ctl .del-btn[aria-pressed="true"]{ background:var(--danger); color:#fff; }
+  .del-step-btn{
+    flex-shrink:0; width:34px; height:34px; margin-top:2px; border-radius:9px;
+    border:1.5px solid var(--line); background:var(--surface); color:var(--danger);
+    font-size:14px; font-weight:800; line-height:1; padding:0;
+  }
+  .del-step-btn[data-armed="1"]{ background:var(--danger); color:#fff; width:auto; padding:0 8px; font-size:12px; }
   @media (max-width:380px){ .countdown{ font-size:88px; } .ex-name{ font-size:24px; } }
 </style>
 </head>
@@ -318,7 +326,7 @@
 
     <div class="card">
       <h2>Tiers &mdash; A most important, F first to cut</h2>
-      <p>Drag a card by its handle (or use its tier menu and arrows) to re-rank. <strong>Skip tonight</strong> knocks an exercise out of the plan entirely, whatever the budget. Rankings save on this device.</p>
+      <p>Drag a card by its handle (or use its tier menu and arrows) to re-rank. <strong>Skip tonight</strong> knocks an exercise out of the plan entirely, whatever the budget. Rankings save on this device. A card&rsquo;s Delete button removes that exercise entirely (Reset in Steps &amp; Settings brings everything back).</p>
       <div id="tierBoard"></div>
     </div>
 
@@ -342,7 +350,7 @@
     <div class="card" style="margin-top:0">
       <h2>Your routine</h2>
       <p id="stepsSummary"></p>
-      <p>Toggle steps off or adjust durations — totals update automatically. Changes are saved on this device and apply the next time you start. Editing stops a run in progress.</p>
+      <p>Toggle steps off, adjust durations, or delete a step with its ✕ button — totals update automatically. Changes are saved on this device and apply the next time you start. Editing stops a run in progress.</p>
       <div id="stepsList"></div>
       <div class="btn-row">
         <button id="btnReset" class="danger">Reset to default routine</button>
@@ -449,7 +457,7 @@ function saveState(){
   try{
     localStorage.setItem(LS_KEY, JSON.stringify({
       steps:steps, prefs:prefs, groupTier:groupTier, groupOrder:groupOrder,
-      skipGroups:skipGroups, tonightIds:tonightIds, planBudgetSec:planBudgetSec, groupMeta:customMeta()
+      skipGroups:skipGroups, tonightIds:tonightIds, planBudgetSec:planBudgetSec, groupMeta:customMeta(), deletedGroups:deletedGroups, deletedStepIds:deletedStepIds
     }));
   }catch(e){ storeOK = false; }
 }
@@ -467,6 +475,7 @@ function clampSec(v, dflt){
 }
 
 var steps, prefs, groupTier, groupOrder, skipGroups, tonightIds, planBudgetSec;
+var deletedGroups = [], deletedStepIds = [];
 
 /* Rebuild the step list from current defaults, overlaying saved per-step
    seconds/enabled and keeping user-added steps — so routine changes in an
@@ -488,6 +497,7 @@ function overlaySavedSteps(savedSteps){
     }
     return c;
   });
+  out = out.filter(function(c){ return deletedGroups.indexOf(c.group) < 0 && deletedStepIds.indexOf(c.id) < 0; });
   savedSteps.forEach(function(s){
     if(!s || !s.id || defaultIds[s.id]) return;
     if(/^s\d+$/.test(s.id)) return; /* retired default step from an older routine version */
@@ -511,6 +521,8 @@ function overlaySavedSteps(savedSteps){
 
   function restoreFrom(sv){
     if(!sv) return;
+    if(Array.isArray(sv.deletedGroups)) deletedGroups = sv.deletedGroups.slice();
+    if(Array.isArray(sv.deletedStepIds)) deletedStepIds = sv.deletedStepIds.slice();
     if(Array.isArray(sv.steps) && sv.steps.length) overlaySavedSteps(sv.steps);
     if(sv.prefs){
       if(typeof sv.prefs.sound === "boolean") prefs.sound = sv.prefs.sound;
@@ -1055,6 +1067,24 @@ function buildStepsEditor(){
     sw.appendChild(cb);
     row.appendChild(sw);
 
+    var delStep = document.createElement("button");
+    delStep.className = "del-step-btn";
+    delStep.textContent = "✕";
+    delStep.setAttribute("aria-label", "Delete step " + step.name);
+    delStep.addEventListener("click", function(){
+      if(delStep.getAttribute("data-armed") === "1"){
+        deleteStep(step.id);
+      }else{
+        delStep.setAttribute("data-armed", "1");
+        delStep.textContent = "Sure?";
+        setTimeout(function(){
+          delStep.removeAttribute("data-armed");
+          delStep.textContent = "✕";
+        }, 3000);
+      }
+    });
+    row.appendChild(delStep);
+
     function applyDuration(v){
       v = Math.round(Number(v));
       if(isNaN(v)) v = step.seconds;
@@ -1126,6 +1156,8 @@ document.getElementById("btnReset").addEventListener("click", function(){
   skipGroups = [];
   tonightIds = null;
   planBudgetSec = null;
+  deletedGroups = [];
+  deletedStepIds = [];
   for(var k in GROUP_META){ if(!DEFAULT_GROUP_TIER.hasOwnProperty(k)) delete GROUP_META[k]; }
   saveState();
   buildStepsEditor();
@@ -1176,6 +1208,40 @@ function customMeta(){
     if(!DEFAULT_GROUP_TIER.hasOwnProperty(k) && GROUP_META[k] && GROUP_META[k].name) o[k] = GROUP_META[k].name;
   }
   return o;
+}
+
+function deleteGroup(gid){
+  steps = steps.filter(function(s){ return s.group !== gid; });
+  if(DEFAULT_GROUP_TIER.hasOwnProperty(gid) && deletedGroups.indexOf(gid) < 0) deletedGroups.push(gid);
+  if(!DEFAULT_GROUP_TIER.hasOwnProperty(gid)) delete GROUP_META[gid];
+  delete groupTier[gid];
+  groupOrder = groupOrder.filter(function(g){ return g !== gid; });
+  skipGroups = skipGroups.filter(function(g){ return g !== gid; });
+  tonightIds = null;
+  saveState();
+  buildStepsEditor();
+  buildBoard();
+  renderPlan();
+  render();
+}
+
+function deleteStep(id){
+  var st = null;
+  steps.forEach(function(s){ if(s.id === id) st = s; });
+  steps = steps.filter(function(s){ return s.id !== id; });
+  var isDefault = DEFAULT_STEPS.some(function(d){ return d.id === id; });
+  if(isDefault && deletedStepIds.indexOf(id) < 0) deletedStepIds.push(id);
+  if(st && !steps.some(function(s){ return s.group === st.group; })){
+    groupOrder = groupOrder.filter(function(g){ return g !== st.group; });
+    skipGroups = skipGroups.filter(function(g){ return g !== st.group; });
+    delete groupTier[st.group];
+  }
+  tonightIds = null;
+  saveState();
+  buildStepsEditor();
+  buildBoard();
+  renderPlan();
+  render();
 }
 
 var tierBoard = document.getElementById("tierBoard");
@@ -1302,6 +1368,25 @@ function groupCard(g){
     renderPlan();
   });
   ctl.appendChild(skip);
+
+  var del = document.createElement("button");
+  del.className = "del-btn";
+  del.setAttribute("aria-pressed", "false");
+  del.textContent = "Delete";
+  del.setAttribute("aria-label", "Delete " + g.name + " entirely");
+  del.addEventListener("click", function(){
+    if(del.getAttribute("aria-pressed") === "true"){
+      deleteGroup(g.id);
+    }else{
+      del.setAttribute("aria-pressed", "true");
+      del.textContent = "Tap again to delete";
+      setTimeout(function(){
+        del.setAttribute("aria-pressed", "false");
+        del.textContent = "Delete";
+      }, 3000);
+    }
+  });
+  ctl.appendChild(del);
 
   card.appendChild(ctl);
   attachDrag(handle, card, g.id);
