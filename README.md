@@ -13,9 +13,19 @@ one self-contained `index.html` file — no build step, no dependencies.
 
 Requires Docker with the Compose plugin on the Pi.
 
+First time (the clone creates the `nightly-stretching-routine` folder):
+
 ```bash
-git clone <this-repo-url> nightly-stretching
-cd nightly-stretching
+git clone https://github.com/achen82/nightly-stretching-routine.git
+cd nightly-stretching-routine
+docker compose up -d --build
+```
+
+To update later:
+
+```bash
+cd nightly-stretching-routine
+git pull
 docker compose up -d --build
 ```
 
@@ -27,8 +37,7 @@ http://<your-pi-ip>:8080
 
 Find the Pi's IP with `hostname -I` on the Pi.
 
-To stop it: `docker compose down`. To update after pulling changes:
-`git pull && docker compose up -d --build`.
+To stop it: `docker compose down`.
 
 ## Add it to your iPhone home screen
 
