@@ -1,0 +1,920 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<meta name="theme-color" content="#0e2a2b" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#eef4f1" media="(prefers-color-scheme: light)" />
+<!-- iOS home-screen web app support -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Stretching" />
+<link rel="icon" href="data:," />
+<title>Nightly Stretching Routine</title>
+<style>
+  :root{
+    color-scheme: light dark;
+    --bg:#eef4f1; --surface:#ffffff; --surface2:#e3ede8; --ink:#14201c; --ink-dim:#4d5f58;
+    --line:#cfddd5; --accent:#0f766e; --accent-ink:#ffffff; --accent-soft:#d7ebe4;
+    --warn-bg:#fdf3d7; --warn-ink:#6b5310; --warn-line:#e7d194;
+    --danger:#b3261e; --ring:#0f766e; --shadow:0 10px 30px rgba(20,40,34,.12);
+    --phase:#0f766e;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0b1512; --surface:#14211c; --surface2:#1b2c25; --ink:#eef5f1; --ink-dim:#a7bcb2;
+      --line:#2b4036; --accent:#2dd4bf; --accent-ink:#06231f; --accent-soft:#123a33;
+      --warn-bg:#3a2f10; --warn-ink:#f3d98b; --warn-line:#6b5a1e;
+      --danger:#ff8a80; --ring:#2dd4bf; --shadow:0 10px 30px rgba(0,0,0,.45);
+      --phase:#5eead4;
+    }
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height:1.45; min-height:100dvh;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .wrap{ max-width:560px; margin:0 auto; padding:16px 16px 40px; }
+  button{ font:inherit; cursor:pointer; }
+  button:focus-visible, input:focus-visible, [tabindex]:focus-visible{ outline:3px solid var(--ring); outline-offset:2px; }
+
+  /* ---------- header ---------- */
+  header.top{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:4px 0 10px; }
+  header.top h1{ font-size:22px; margin:0; letter-spacing:-.01em; font-weight:800; }
+  header.top .totals{ font-size:13px; color:var(--ink-dim); text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  header.top .totals strong{ color:var(--ink); font-size:15px; }
+
+  nav.tabs{ display:flex; gap:8px; margin:6px 0 14px; }
+  nav.tabs button{
+    flex:1; padding:11px 8px; border-radius:12px; border:1.5px solid var(--line);
+    background:var(--surface); color:var(--ink); font-weight:700; font-size:15px;
+  }
+  nav.tabs button[aria-selected="true"]{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+
+  /* ---------- timer card ---------- */
+  .timer-card{
+    background:var(--surface); border:1px solid var(--line); border-radius:20px;
+    box-shadow:var(--shadow); padding:20px 18px 18px; text-align:center;
+  }
+  .phase{ font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--phase); margin:0 0 4px; }
+  .step-count{ font-size:13px; color:var(--ink-dim); font-variant-numeric:tabular-nums; margin:0 0 10px; }
+  .side-badge{
+    display:none; margin:0 auto 8px; padding:4px 16px; border-radius:999px;
+    background:var(--accent); color:var(--accent-ink); font-weight:800; font-size:15px; letter-spacing:.14em; width:fit-content;
+  }
+  .side-badge.show{ display:block; }
+  .ex-name{ font-size:27px; font-weight:800; line-height:1.15; margin:2px 0 6px; letter-spacing:-.01em; }
+  .ex-cue{ font-size:15.5px; color:var(--ink-dim); margin:0 auto 6px; max-width:44ch; min-height:2.6em; }
+  .countdown{
+    font-size:104px; font-weight:800; line-height:1; letter-spacing:-.03em;
+    font-variant-numeric:tabular-nums; margin:10px 0 4px;
+  }
+  .countdown small{ font-size:44px; font-weight:700; color:var(--ink-dim); }
+  .state-line{ font-size:14px; font-weight:700; min-height:1.4em; margin:2px 0 0; }
+  .state-line.paused{ color:var(--danger); }
+  .next-line{ font-size:15px; color:var(--ink-dim); margin:8px 0 0; min-height:1.4em; }
+  .next-line strong{ color:var(--ink); }
+
+  .progress-outer{ height:12px; background:var(--surface2); border-radius:999px; overflow:hidden; margin:16px 0 6px; border:1px solid var(--line); }
+  .progress-inner{ height:100%; width:0%; background:var(--accent); border-radius:999px; transition:width .25s linear; }
+  .progress-labels{ display:flex; justify-content:space-between; font-size:12.5px; color:var(--ink-dim); font-variant-numeric:tabular-nums; }
+
+  /* transition state */
+  .timer-card.transitioning{ border-color:var(--warn-line); background:var(--warn-bg); }
+  .timer-card.transitioning .phase, .timer-card.transitioning .ex-name{ color:var(--warn-ink); }
+  .timer-card.transitioning .ex-cue{ color:var(--warn-ink); opacity:.85; }
+  .timer-card.transitioning .countdown{ color:var(--warn-ink); }
+  .timer-card.transitioning .progress-inner{ background:var(--warn-ink); }
+
+  /* ---------- controls ---------- */
+  .controls{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:16px; }
+  .controls button{
+    padding:15px 6px; border-radius:14px; border:1.5px solid var(--line);
+    background:var(--surface); color:var(--ink); font-weight:700; font-size:16px; min-height:56px;
+  }
+  .controls button:disabled{ opacity:.38; cursor:default; }
+  .controls button.primary{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-size:18px; }
+  .controls .span2{ grid-column:span 2; }
+  .controls .span3{ grid-column:span 3; }
+
+  .banner{
+    display:none; margin-top:14px; padding:12px 14px; border-radius:12px;
+    background:var(--warn-bg); color:var(--warn-ink); border:1px solid var(--warn-line);
+    font-size:14.5px; text-align:left;
+  }
+  .banner.show{ display:block; }
+
+  /* ---------- cards / sections ---------- */
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:16px; margin-top:14px; }
+  .card h2{ font-size:17px; margin:0 0 8px; }
+  .card p{ margin:6px 0; font-size:14.5px; color:var(--ink-dim); }
+  .card p strong, .card li strong{ color:var(--ink); }
+  .card ul{ margin:6px 0 6px 18px; padding:0; font-size:14.5px; color:var(--ink-dim); }
+  .card li{ margin:5px 0; }
+
+  /* ---------- steps / settings ---------- */
+  .step-row{
+    display:flex; align-items:flex-start; gap:10px; padding:11px 0; border-bottom:1px solid var(--line);
+  }
+  .step-row:last-child{ border-bottom:none; }
+  .step-row.off{ opacity:.45; }
+  .step-num{ font-size:12.5px; color:var(--ink-dim); font-variant-numeric:tabular-nums; min-width:22px; padding-top:3px; text-align:right; }
+  .step-main{ flex:1; min-width:0; }
+  .step-name{ font-weight:700; font-size:15px; line-height:1.3; }
+  .step-meta{ font-size:12.5px; color:var(--ink-dim); }
+  .dur-ctl{ display:flex; align-items:center; gap:6px; flex-shrink:0; }
+  .dur-ctl button{
+    width:34px; height:34px; border-radius:9px; border:1.5px solid var(--line);
+    background:var(--surface2); color:var(--ink); font-size:18px; font-weight:800; line-height:1; padding:0;
+  }
+  .dur-ctl input{
+    width:52px; height:34px; text-align:center; font:inherit; font-size:15px; font-weight:700;
+    border:1.5px solid var(--line); border-radius:9px; background:var(--surface); color:var(--ink);
+    font-variant-numeric:tabular-nums; -moz-appearance:textfield; appearance:textfield;
+  }
+  .dur-ctl input::-webkit-outer-spin-button, .dur-ctl input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+  .dur-ctl .unit{ font-size:12px; color:var(--ink-dim); }
+
+  /* toggle switch — the input itself is the visible control */
+  .switch{ flex-shrink:0; display:inline-flex; margin-top:2px; }
+  .switch input{
+    appearance:none; -webkit-appearance:none; position:relative; flex-shrink:0;
+    width:48px; height:28px; margin:0; cursor:pointer; border-radius:999px;
+    background:var(--surface2); border:1.5px solid var(--line); transition:background .15s, border-color .15s;
+  }
+  .switch input::after{
+    content:""; position:absolute; top:2.5px; left:3px; width:19px; height:19px; border-radius:50%;
+    background:var(--ink-dim); transition:transform .15s, background .15s;
+  }
+  .switch input:checked{ background:var(--accent); border-color:var(--accent); }
+  .switch input:checked::after{ transform:translateX(20px); background:var(--accent-ink); }
+
+  .phase-head{ font-size:12.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:var(--phase); margin:16px 0 2px; }
+  .phase-head:first-child{ margin-top:2px; }
+
+  .pref-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); }
+  .pref-row:last-child{ border-bottom:none; }
+  .pref-row .lbl{ font-size:15px; font-weight:600; }
+  .pref-row .sub{ font-size:13px; color:var(--ink-dim); font-weight:400; }
+
+  .btn-row{ display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; }
+  .btn-row button{
+    flex:1; min-width:140px; padding:13px 10px; border-radius:12px; border:1.5px solid var(--line);
+    background:var(--surface); color:var(--ink); font-weight:700; font-size:15px;
+  }
+  .btn-row button.danger{ color:var(--danger); border-color:var(--danger); }
+
+  /* ---------- completion ---------- */
+  .done-card{ text-align:center; padding:34px 20px; }
+  .done-card .big{ font-size:56px; margin:0 0 6px; }
+  .done-card h2{ font-size:26px; margin:0 0 8px; }
+  .done-card p{ color:var(--ink-dim); font-size:16px; }
+
+  .hidden{ display:none !important; }
+  footer.note{ margin-top:18px; font-size:12.5px; color:var(--ink-dim); text-align:center; }
+  @media (max-width:380px){ .countdown{ font-size:88px; } .ex-name{ font-size:24px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1>Nightly Stretching</h1>
+    <div class="totals" id="totalsLine" aria-live="polite"></div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button id="tabTimer" role="tab" aria-selected="true">Timer</button>
+    <button id="tabSteps" role="tab" aria-selected="false">Steps &amp; Settings</button>
+  </nav>
+
+  <!-- ============ TIMER VIEW ============ -->
+  <section id="viewTimer">
+    <div class="timer-card" id="timerCard">
+      <p class="phase" id="phaseLabel">Ready</p>
+      <p class="step-count" id="stepCount"></p>
+      <div class="side-badge" id="sideBadge" aria-hidden="true"></div>
+      <p class="ex-name" id="exName">Nightly Stretching Routine</p>
+      <p class="ex-cue" id="exCue">Press Start and follow along hands-free. Every step is followed by a 5-second transition — except the last one.</p>
+      <div class="countdown" id="countdown" aria-live="off">17:00</div>
+      <p class="state-line" id="stateLine"></p>
+      <p class="next-line" id="nextLine"></p>
+      <div class="progress-outer" role="progressbar" aria-label="Overall routine progress" id="progressBar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="progress-inner" id="progressInner"></div>
+      </div>
+      <div class="progress-labels"><span id="elapsedLabel">0:00 elapsed</span><span id="remainLabel">17:00 left</span></div>
+
+      <div class="banner" id="bgBanner" role="alert">
+        <strong>Paused — app was backgrounded.</strong> iOS suspends web apps when the screen locks or you switch apps, so the timer froze instead of drifting. Keep this app on screen for reliable cues, then tap Resume.
+      </div>
+
+      <div class="controls">
+        <button id="btnPrev" disabled>◀ Prev</button>
+        <button id="btnStartPause" class="primary">▶ Start</button>
+        <button id="btnSkip" disabled>Skip ▶</button>
+        <button id="btnRestart" disabled>↺ Restart</button>
+        <button id="btnMute">🔊 Sound on</button>
+        <button id="btnVoice">🗣 Voice on</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Using it on iPhone</h2>
+      <p><strong>Add to Home Screen:</strong> open this page in Safari, tap the <strong>Share</strong> button, then <strong>“Add to Home Screen.”</strong> It will launch full-screen like an app.</p>
+      <p><strong>Keep it on screen while you stretch.</strong> The timer asks iOS to keep the display awake (Wake Lock) while it runs. Sounds and voice cues are reliable only while the app is in the foreground with the screen on — iOS can suspend web apps in the background or on the lock screen, so lock-screen alerts aren’t guaranteed. If the app does get backgrounded, the timer pauses itself rather than losing your place.</p>
+    </div>
+
+    <div class="card">
+      <h2>Technique &amp; safety</h2>
+      <ul>
+        <li>Don’t roll directly over the back of the knee, kneecap, Achilles tendon, IT band, or prominent hip bone.</li>
+        <li>Glute work stays on <strong>muscle tissue</strong> with comfortable pressure. Stop for sharp pain, numbness, tingling, or pain shooting down the leg.</li>
+        <li>Avoid forceful calf stretching if it causes Achilles insertion pain. Every stretch should feel gentle, never painful.</li>
+        <li>This is a mobility and comfort routine, not treatment for an injury — worsening or persistent pain warrants proper evaluation.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ COMPLETION (replaces timer card area visually) ============ -->
+  <section id="viewDone" class="hidden">
+    <div class="timer-card done-card">
+      <p class="big" aria-hidden="true">✓</p>
+      <h2>Routine complete</h2>
+      <p id="doneSummary"></p>
+      <div class="btn-row">
+        <button id="btnAgain" class="primary" style="background:var(--accent);border-color:var(--accent);color:var(--accent-ink)">Run it again</button>
+        <button id="btnDoneSteps">Review steps</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STEPS / SETTINGS VIEW ============ -->
+  <section id="viewSteps" class="hidden">
+    <div class="card" style="margin-top:0">
+      <h2>Your routine</h2>
+      <p id="stepsSummary"></p>
+      <p>Toggle steps off or adjust durations — totals update automatically. Changes are saved on this device and apply the next time you start. Editing stops a run in progress.</p>
+      <div id="stepsList"></div>
+      <div class="btn-row">
+        <button id="btnReset" class="danger">Reset to default 17:00 routine</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Cues</h2>
+      <div class="pref-row">
+        <div><div class="lbl">Sound</div><div class="sub">Beeps at each exercise, each transition, and a 3–2–1 countdown.</div></div>
+        <label class="switch"><input type="checkbox" id="prefSound" checked aria-label="Sound"></label>
+      </div>
+      <div class="pref-row">
+        <div><div class="lbl">Voice announcements</div><div class="sub">Speaks each exercise name as it starts.</div></div>
+        <label class="switch"><input type="checkbox" id="prefVoice" checked aria-label="Voice announcements"></label>
+      </div>
+      <div class="pref-row">
+        <div><div class="lbl">Countdown beeps</div><div class="sub">Short beep at 3, 2, and 1 seconds.</div></div>
+        <label class="switch"><input type="checkbox" id="prefCountBeeps" checked aria-label="Countdown beeps"></label>
+      </div>
+    </div>
+  </section>
+
+  <footer class="note">28-step nightly routine · 5-second transitions between every step · edits save on this device only</footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ================= data ================= */
+var TRANSITION_SECONDS = 5;
+
+var DEFAULT_STEPS = [
+  {id:"s1",  phase:"Roll / massage", name:"Calf rolling — left", seconds:30, cue:"Roll calf muscle from above the Achilles to below the knee; rotate leg to cover angles; avoid knee crease."},
+  {id:"s2",  phase:"Roll / massage", name:"Calf rolling — right", seconds:30, cue:"Same as left; do not press directly on the Achilles tendon."},
+  {id:"s3",  phase:"Roll / massage", name:"Quad rolling — left", seconds:30, cue:"Use Roll Recovery R8 or foam roller. Stay on the quad muscle, not the kneecap or tendons."},
+  {id:"s4",  phase:"Roll / massage", name:"Quad rolling — right", seconds:30, cue:"Same as left."},
+  {id:"s5",  phase:"Roll / massage", name:"Tennis ball — upper-outer left glute", seconds:30, cue:"Target the fleshy upper-outer glute near—but not directly on—the hip bone."},
+  {id:"s6",  phase:"Roll / massage", name:"Tennis ball — upper-outer right glute", seconds:30, cue:"Same as left. Use tolerable, moderate pressure."},
+  {id:"s7",  phase:"Roll / massage", name:"Tennis ball — deeper left glute", seconds:30, cue:"Target the fleshy buttock area using gentle pressure; avoid sharp, radiating, or tingling sensations."},
+  {id:"s8",  phase:"Roll / massage", name:"Tennis ball — deeper right glute", seconds:30, cue:"Same as left. Do not press directly on bony points or the sciatic nerve pathway."},
+  {id:"s9",  phase:"Floor stretches / mobility", name:"Couch stretch — left", seconds:45, cue:"Quad and hip flexor. Keep pelvis gently tucked, without arching the lower back."},
+  {id:"s10", phase:"Floor stretches / mobility", name:"Couch stretch — right", seconds:45, cue:"Same as left. Ease off if front-of-knee pressure is uncomfortable."},
+  {id:"s11", phase:"Floor stretches / mobility", name:"Pretzel stretch — left", seconds:30, cue:"Use your preferred pretzel variation; gentle glute/hip stretch without forcing the spine."},
+  {id:"s12", phase:"Floor stretches / mobility", name:"Pretzel stretch — right", seconds:30, cue:"Same as left."},
+  {id:"s13", phase:"Floor stretches / mobility", name:"Figure-four stretch — left", seconds:30, cue:"Gentle deep-glute/hip stretch; don’t force the knee."},
+  {id:"s14", phase:"Floor stretches / mobility", name:"Figure-four stretch — right", seconds:30, cue:"Same as left."},
+  {id:"s15", phase:"Floor stretches / mobility", name:"Hamstring stretch — left", seconds:30, cue:"Relaxed position with a small knee bend if needed; no bouncing."},
+  {id:"s16", phase:"Floor stretches / mobility", name:"Hamstring stretch — right", seconds:30, cue:"Same as left."},
+  {id:"s17", phase:"Floor stretches / mobility", name:"Butterfly stretch", seconds:45, cue:"Feet together, knees gently toward floor; focus on inner thighs, without pressing on knees."},
+  {id:"s18", phase:"Floor stretches / mobility", name:"Open-book rotations — left", seconds:30, cue:"About five slow reps, moving comfortably through upper-back rotation."},
+  {id:"s19", phase:"Floor stretches / mobility", name:"Open-book rotations — right", seconds:30, cue:"About five slow reps."},
+  {id:"s20", phase:"Wall / doorway finish", name:"Straight-knee calf stretch — left", seconds:30, cue:"Emphasize gastrocnemius; heel down, knee straight but not locked."},
+  {id:"s21", phase:"Wall / doorway finish", name:"Straight-knee calf stretch — right", seconds:30, cue:"Same as left."},
+  {id:"s22", phase:"Wall / doorway finish", name:"Bent-knee calf stretch — left", seconds:30, cue:"Emphasize soleus; heel stays down as knee bends gently."},
+  {id:"s23", phase:"Wall / doorway finish", name:"Bent-knee calf stretch — right", seconds:30, cue:"Same as left."},
+  {id:"s24", phase:"Wall / doorway finish", name:"Doorway chest stretch — left", seconds:30, cue:"Gentle chest/front-shoulder opening; avoid overstretching shoulder."},
+  {id:"s25", phase:"Wall / doorway finish", name:"Doorway chest stretch — right", seconds:30, cue:"Same as left."},
+  {id:"s26", phase:"Wall / doorway finish", name:"Upper-trap neck stretch — left", seconds:30, cue:"Gentle ear-to-shoulder tilt; avoid pulling hard on head."},
+  {id:"s27", phase:"Wall / doorway finish", name:"Upper-trap neck stretch — right", seconds:30, cue:"Same as left."},
+  {id:"s28", phase:"Wall / doorway finish", name:"Chin tucks", seconds:30, cue:"About five slow, controlled reps; move straight back rather than looking downward."}
+];
+
+/* ================= persistence (this device only) ================= */
+var LS_KEY = "nightly-stretching-v1";
+var storeOK = true;
+function loadState(){
+  try{
+    var raw = localStorage.getItem(LS_KEY);
+    if(!raw) return null;
+    return JSON.parse(raw);
+  }catch(e){ storeOK = false; return null; }
+}
+function saveState(){
+  if(!storeOK) return;
+  try{
+    localStorage.setItem(LS_KEY, JSON.stringify({steps:steps, prefs:prefs}));
+  }catch(e){ storeOK = false; }
+}
+
+function cloneDefaults(){
+  return DEFAULT_STEPS.map(function(s){
+    return {id:s.id, phase:s.phase, name:s.name, seconds:s.seconds, cue:s.cue, enabled:true};
+  });
+}
+
+var saved = loadState();
+var steps, prefs;
+if(saved && Array.isArray(saved.steps) && saved.steps.length){
+  /* merge saved values onto defaults so new fields/structure stay sane */
+  var byId = {};
+  saved.steps.forEach(function(s){ byId[s.id] = s; });
+  steps = DEFAULT_STEPS.map(function(d){
+    var s = byId[d.id];
+    return {
+      id:d.id, phase:d.phase, name:d.name, cue:d.cue,
+      seconds: (s && typeof s.seconds === "number" && s.seconds >= 5 && s.seconds <= 600) ? Math.round(s.seconds) : d.seconds,
+      enabled: s ? s.enabled !== false : true
+    };
+  });
+  prefs = { sound:true, voice:true, countBeeps:true };
+  if(saved.prefs){
+    if(typeof saved.prefs.sound === "boolean") prefs.sound = saved.prefs.sound;
+    if(typeof saved.prefs.voice === "boolean") prefs.voice = saved.prefs.voice;
+    if(typeof saved.prefs.countBeeps === "boolean") prefs.countBeeps = saved.prefs.countBeeps;
+  }
+}else{
+  steps = cloneDefaults();
+  prefs = { sound:true, voice:true, countBeeps:true };
+}
+
+/* ================= derived ================= */
+function enabledSteps(){ return steps.filter(function(s){ return s.enabled; }); }
+function totals(){
+  var en = enabledSteps();
+  var active = en.reduce(function(a,s){ return a + s.seconds; }, 0);
+  var trans = Math.max(0, en.length - 1);
+  return { count: en.length, active: active, transitions: trans, total: active + trans * TRANSITION_SECONDS };
+}
+function fmt(sec){
+  sec = Math.max(0, Math.round(sec));
+  var m = Math.floor(sec / 60), s = sec % 60;
+  return m + ":" + (s < 10 ? "0" : "") + s;
+}
+function sideOf(name){
+  if(/— left\b/.test(name) || / left glute/.test(name)) return "LEFT";
+  if(/— right\b/.test(name) || / right glute/.test(name)) return "RIGHT";
+  return "";
+}
+
+/* ================= audio ================= */
+var audioCtx = null;
+function ensureAudio(){
+  if(!audioCtx){
+    try{
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if(AC) audioCtx = new AC();
+    }catch(e){ audioCtx = null; }
+  }
+  if(audioCtx && audioCtx.state === "suspended"){ audioCtx.resume(); }
+  return audioCtx;
+}
+function beep(freq, durMs, delayMs, vol){
+  if(!prefs.sound) return;
+  var ctx = ensureAudio();
+  if(!ctx) return;
+  var t0 = ctx.currentTime + (delayMs || 0) / 1000;
+  var osc = ctx.createOscillator(), gain = ctx.createGain();
+  osc.type = "sine"; osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(vol || 0.22, t0 + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + durMs / 1000);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(t0); osc.stop(t0 + durMs / 1000 + 0.05);
+  if(navigator.vibrate){ try{ navigator.vibrate(15); }catch(e){} }
+}
+function sndExerciseStart(){ beep(660, 140, 0); beep(880, 200, 150); }
+function sndTransitionStart(){ beep(440, 160, 0); }
+function sndCount(n){ beep(n === 1 ? 990 : 740, 90, 0, 0.16); }
+function sndDone(){ beep(523,160,0); beep(659,160,170); beep(784,260,340); }
+function speak(text){
+  if(!prefs.voice) return;
+  try{
+    if(!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(text);
+    u.rate = 1.02; u.volume = 1;
+    window.speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+/* ================= wake lock ================= */
+var wakeLock = null;
+function requestWakeLock(){
+  if(!("wakeLock" in navigator)) return;
+  try{
+    navigator.wakeLock.request("screen").then(function(wl){
+      wakeLock = wl;
+      wl.addEventListener("release", function(){ wakeLock = null; });
+    }).catch(function(){});
+  }catch(e){}
+}
+function releaseWakeLock(){
+  if(wakeLock){ try{ wakeLock.release(); }catch(e){} wakeLock = null; }
+}
+
+/* ================= timer state machine =================
+   mode: "idle" | "exercise" | "transition" | "done"
+   segIndex: index into enabledSteps() for the current (exercise) or
+             just-finished (transition) step.
+   Timing is timestamp-based: segEndAt = performance-based Date.now() deadline;
+   remainingMs is frozen on pause. No accumulated-interval drift.            */
+var T = {
+  mode: "idle",
+  running: false,
+  segIndex: 0,
+  segEndAt: 0,
+  remainingMs: 0,
+  rafId: null,
+  lastWholeSec: -1,
+  pausedByBackground: false
+};
+
+function currentList(){ return enabledSteps(); }
+
+function segmentDurationMs(){
+  if(T.mode === "exercise"){
+    var list = currentList();
+    return list[T.segIndex] ? list[T.segIndex].seconds * 1000 : 0;
+  }
+  if(T.mode === "transition") return TRANSITION_SECONDS * 1000;
+  return 0;
+}
+
+/* elapsed time across the whole timeline up to "now" (excluding current partial segment remainder) */
+function elapsedBeforeSegment(){
+  var list = currentList(), ms = 0;
+  var upto = (T.mode === "transition") ? T.segIndex + 1 : T.segIndex;
+  for(var i = 0; i < upto && i < list.length; i++){
+    ms += list[i].seconds * 1000;
+    if(i < list.length - 1) ms += TRANSITION_SECONDS * 1000;
+  }
+  if(T.mode === "transition"){
+    /* the transition after step segIndex: subtract it back and count it separately */
+    ms -= TRANSITION_SECONDS * 1000;
+    ms += list[T.segIndex].seconds * 1000 * 0; /* clarity no-op */
+    /* recompute cleanly: exercises 0..segIndex + transitions between them */
+    ms = 0;
+    for(var j = 0; j <= T.segIndex && j < list.length; j++){
+      ms += list[j].seconds * 1000;
+      if(j < T.segIndex) ms += TRANSITION_SECONDS * 1000;
+    }
+  }
+  return ms;
+}
+
+function startSegment(mode, idx, announce){
+  T.mode = mode; T.segIndex = idx;
+  var dur = segmentDurationMs();
+  T.remainingMs = dur;
+  T.segEndAt = Date.now() + dur;
+  T.lastWholeSec = -1;
+  if(announce){
+    var list = currentList();
+    if(mode === "exercise"){
+      sndExerciseStart();
+      speak(list[idx].name);
+    }else if(mode === "transition"){
+      sndTransitionStart();
+      speak("Next: " + list[idx + 1].name);
+    }
+  }
+  render();
+}
+
+function tick(){
+  if(!T.running) return;
+  var remain = T.segEndAt - Date.now();
+  if(remain <= 0){
+    advanceSegment();
+    return;
+  }
+  T.remainingMs = remain;
+  var whole = Math.ceil(remain / 1000);
+  if(prefs.countBeeps && prefs.sound && whole <= 3 && whole >= 1 && whole !== T.lastWholeSec){
+    sndCount(whole);
+  }
+  T.lastWholeSec = whole;
+  render();
+  T.rafId = requestAnimationFrame(tick);
+}
+
+function runLoop(){
+  cancelAnimationFrame(T.rafId);
+  T.rafId = requestAnimationFrame(tick);
+}
+
+function advanceSegment(){
+  var list = currentList();
+  if(T.mode === "exercise"){
+    if(T.segIndex >= list.length - 1){
+      finishRoutine();
+      return;
+    }
+    startSegment("transition", T.segIndex, true);
+    runLoop();
+  }else if(T.mode === "transition"){
+    startSegment("exercise", T.segIndex + 1, true);
+    runLoop();
+  }
+}
+
+function finishRoutine(){
+  T.mode = "done"; T.running = false;
+  cancelAnimationFrame(T.rafId);
+  releaseWakeLock();
+  sndDone();
+  speak("Routine complete. Nice work.");
+  var t = totals();
+  document.getElementById("doneSummary").textContent =
+    "You completed all " + t.count + " steps — " + fmt(t.active) + " of stretching in " + fmt(t.total) + " total.";
+  showView("done");
+  render();
+}
+
+function startRoutine(){
+  var list = currentList();
+  if(!list.length) return;
+  ensureAudio();
+  hideBgBanner();
+  T.pausedByBackground = false;
+  T.running = true;
+  requestWakeLock();
+  startSegment("exercise", 0, true);
+  runLoop();
+}
+
+function pauseTimer(fromBackground){
+  if(!T.running) return;
+  T.remainingMs = Math.max(0, T.segEndAt - Date.now());
+  T.running = false;
+  cancelAnimationFrame(T.rafId);
+  releaseWakeLock();
+  if(fromBackground){
+    T.pausedByBackground = true;
+    document.getElementById("bgBanner").classList.add("show");
+  }
+  render();
+}
+
+function resumeTimer(){
+  if(T.running || T.mode === "idle" || T.mode === "done") return;
+  ensureAudio();
+  hideBgBanner();
+  T.pausedByBackground = false;
+  T.segEndAt = Date.now() + T.remainingMs;
+  T.running = true;
+  requestWakeLock();
+  runLoop();
+  render();
+}
+
+function stopToIdle(){
+  T.mode = "idle"; T.running = false; T.segIndex = 0;
+  T.remainingMs = 0; T.lastWholeSec = -1; T.pausedByBackground = false;
+  cancelAnimationFrame(T.rafId);
+  releaseWakeLock();
+  hideBgBanner();
+  try{ if("speechSynthesis" in window) window.speechSynthesis.cancel(); }catch(e){}
+  showView("timer");
+  render();
+}
+
+/* Prev: during exercise -> previous exercise (or restart current if first).
+         during transition -> back to the exercise that just finished.   */
+function goPrev(){
+  if(T.mode === "idle" || T.mode === "done") return;
+  ensureAudio();
+  hideBgBanner(); T.pausedByBackground = false;
+  var wasRunning = T.running;
+  if(T.mode === "transition"){
+    startSegment("exercise", T.segIndex, true);
+  }else{
+    startSegment("exercise", Math.max(0, T.segIndex - 1), true);
+  }
+  T.running = wasRunning;
+  if(wasRunning){ T.segEndAt = Date.now() + T.remainingMs; runLoop(); }
+  render();
+}
+
+/* Skip: during exercise -> transition to next (or finish if last).
+         during transition -> next exercise immediately.              */
+function goSkip(){
+  if(T.mode === "idle" || T.mode === "done") return;
+  ensureAudio();
+  hideBgBanner(); T.pausedByBackground = false;
+  var list = currentList();
+  var wasRunning = T.running;
+  if(T.mode === "exercise"){
+    if(T.segIndex >= list.length - 1){ finishRoutine(); return; }
+    startSegment("transition", T.segIndex, true);
+  }else if(T.mode === "transition"){
+    startSegment("exercise", T.segIndex + 1, true);
+  }
+  T.running = wasRunning;
+  if(wasRunning){ T.segEndAt = Date.now() + T.remainingMs; runLoop(); }
+  else { cancelAnimationFrame(T.rafId); }
+  render();
+}
+
+function hideBgBanner(){ document.getElementById("bgBanner").classList.remove("show"); }
+
+/* ================= rendering ================= */
+var el = {};
+["timerCard","phaseLabel","stepCount","sideBadge","exName","exCue","countdown","stateLine","nextLine",
+ "progressInner","progressBar","elapsedLabel","remainLabel","totalsLine","stepsSummary",
+ "btnPrev","btnStartPause","btnSkip","btnRestart","btnMute","btnVoice"].forEach(function(id){ el[id] = document.getElementById(id); });
+
+function render(){
+  var t = totals();
+  el.totalsLine.innerHTML = "<strong>" + fmt(t.total) + "</strong> total<br>" +
+    t.count + " steps · " + t.transitions + " transitions";
+  el.stepsSummary.textContent = t.count + " steps enabled · " + fmt(t.active) + " active · " +
+    t.transitions + " transitions × " + TRANSITION_SECONDS + "s · " + fmt(t.total) + " total";
+
+  var list = currentList();
+  el.timerCard.classList.toggle("transitioning", T.mode === "transition");
+
+  if(T.mode === "idle"){
+    el.phaseLabel.textContent = "Ready";
+    el.stepCount.textContent = list.length ? ("Step 1 of " + list.length + " when you start") : "No steps enabled";
+    el.sideBadge.className = "side-badge"; el.sideBadge.textContent = "";
+    el.exName.textContent = "Nightly Stretching Routine";
+    el.exCue.textContent = "Press Start and follow along hands-free. Every step is followed by a 5-second transition — except the last one.";
+    el.countdown.textContent = fmt(t.total);
+    el.stateLine.textContent = "";
+    el.stateLine.className = "state-line";
+    el.nextLine.innerHTML = list.length ? ("First up: <strong>" + list[0].name + "</strong>") : "Enable at least one step in Steps & Settings.";
+    setProgress(0);
+    el.btnStartPause.textContent = "▶ Start";
+    el.btnPrev.disabled = true; el.btnSkip.disabled = true; el.btnRestart.disabled = true;
+  }
+  else if(T.mode === "exercise"){
+    var step = list[T.segIndex];
+    if(!step){ stopToIdle(); return; }
+    var remainSec = Math.ceil(T.remainingMs / 1000);
+    el.phaseLabel.textContent = step.phase;
+    el.stepCount.textContent = "Step " + (T.segIndex + 1) + " of " + list.length;
+    var side = sideOf(step.name);
+    el.sideBadge.className = "side-badge" + (side ? " show" : "");
+    el.sideBadge.textContent = side;
+    el.exName.textContent = step.name;
+    el.exCue.textContent = step.cue;
+    el.countdown.textContent = fmt(remainSec);
+    el.stateLine.textContent = T.running ? "" : (T.pausedByBackground ? "Paused — app was backgrounded" : "Paused");
+    el.stateLine.className = "state-line" + (T.running ? "" : " paused");
+    var nxt = list[T.segIndex + 1];
+    el.nextLine.innerHTML = nxt ? ("Next: <strong>" + nxt.name + "</strong>") : "Last step — finish strong.";
+    var elapsed = elapsedBeforeSegment() + (step.seconds * 1000 - T.remainingMs);
+    setProgress(t.total ? (elapsed / 1000) / t.total : 0);
+    el.btnStartPause.textContent = T.running ? "⏸ Pause" : "▶ Resume";
+    el.btnPrev.disabled = false; el.btnSkip.disabled = false; el.btnRestart.disabled = false;
+  }
+  else if(T.mode === "transition"){
+    var next = list[T.segIndex + 1];
+    if(!next){ finishRoutine(); return; }
+    var rSec = Math.ceil(T.remainingMs / 1000);
+    el.phaseLabel.textContent = "Transition — get ready";
+    el.stepCount.textContent = "Next is step " + (T.segIndex + 2) + " of " + list.length;
+    var nSide = sideOf(next.name);
+    el.sideBadge.className = "side-badge" + (nSide ? " show" : "");
+    el.sideBadge.textContent = nSide;
+    el.exName.textContent = "Next: " + next.name;
+    el.exCue.textContent = next.cue;
+    el.countdown.textContent = String(rSec);
+    el.stateLine.textContent = T.running ? "Switch sides / set up" : (T.pausedByBackground ? "Paused — app was backgrounded" : "Paused");
+    el.stateLine.className = "state-line" + (T.running ? "" : " paused");
+    el.nextLine.innerHTML = "Then: <strong>" + next.name + "</strong> · " + fmt(next.seconds);
+    var doneMs = elapsedBeforeSegment() + (TRANSITION_SECONDS * 1000 - T.remainingMs);
+    setProgress(t.total ? (doneMs / 1000) / t.total : 0);
+    el.btnStartPause.textContent = T.running ? "⏸ Pause" : "▶ Resume";
+    el.btnPrev.disabled = false; el.btnSkip.disabled = false; el.btnRestart.disabled = false;
+  }
+  else if(T.mode === "done"){
+    setProgress(1);
+  }
+
+  el.btnMute.textContent = prefs.sound ? "🔊 Sound on" : "🔇 Muted";
+  el.btnVoice.textContent = prefs.voice ? "🗣 Voice on" : "🤐 Voice off";
+}
+
+function setProgress(frac){
+  frac = Math.max(0, Math.min(1, frac));
+  var t = totals();
+  el.progressInner.style.width = (frac * 100).toFixed(1) + "%";
+  el.progressBar.setAttribute("aria-valuenow", String(Math.round(frac * 100)));
+  var elapsedSec = Math.round(frac * t.total);
+  el.elapsedLabel.textContent = fmt(elapsedSec) + " elapsed";
+  el.remainLabel.textContent = fmt(t.total - elapsedSec) + " left";
+}
+
+/* ================= views ================= */
+var viewTimer = document.getElementById("viewTimer"),
+    viewSteps = document.getElementById("viewSteps"),
+    viewDone  = document.getElementById("viewDone"),
+    tabTimer  = document.getElementById("tabTimer"),
+    tabSteps  = document.getElementById("tabSteps");
+
+function showView(which){
+  viewTimer.classList.toggle("hidden", which !== "timer");
+  viewDone.classList.toggle("hidden", which !== "done");
+  viewSteps.classList.toggle("hidden", which !== "steps");
+  tabTimer.setAttribute("aria-selected", which === "steps" ? "false" : "true");
+  tabSteps.setAttribute("aria-selected", which === "steps" ? "true" : "false");
+  window.scrollTo(0, 0);
+}
+tabTimer.addEventListener("click", function(){ showView(T.mode === "done" ? "done" : "timer"); });
+tabSteps.addEventListener("click", function(){ showView("steps"); });
+
+/* ================= steps editor ================= */
+var stepsList = document.getElementById("stepsList");
+function buildStepsEditor(){
+  stepsList.innerHTML = "";
+  var lastPhase = null;
+  steps.forEach(function(step, i){
+    if(step.phase !== lastPhase){
+      lastPhase = step.phase;
+      var h = document.createElement("div");
+      h.className = "phase-head"; h.textContent = step.phase;
+      stepsList.appendChild(h);
+    }
+    var row = document.createElement("div");
+    row.className = "step-row" + (step.enabled ? "" : " off");
+
+    var num = document.createElement("div");
+    num.className = "step-num"; num.textContent = (i + 1) + ".";
+    row.appendChild(num);
+
+    var main = document.createElement("div");
+    main.className = "step-main";
+    var nm = document.createElement("div");
+    nm.className = "step-name"; nm.textContent = step.name;
+    var meta = document.createElement("div");
+    meta.className = "step-meta"; meta.textContent = fmt(step.seconds) + " · " + step.cue;
+    main.appendChild(nm); main.appendChild(meta);
+    row.appendChild(main);
+
+    var dur = document.createElement("div");
+    dur.className = "dur-ctl";
+    var minus = document.createElement("button");
+    minus.textContent = "−"; minus.setAttribute("aria-label", "Decrease duration for " + step.name);
+    var input = document.createElement("input");
+    input.type = "number"; input.min = "5"; input.max = "600"; input.step = "5";
+    input.value = step.seconds; input.setAttribute("aria-label", "Duration in seconds for " + step.name);
+    var plus = document.createElement("button");
+    plus.textContent = "+"; plus.setAttribute("aria-label", "Increase duration for " + step.name);
+    var unit = document.createElement("span");
+    unit.className = "unit"; unit.textContent = "sec";
+    dur.appendChild(minus); dur.appendChild(input); dur.appendChild(plus); dur.appendChild(unit);
+    row.appendChild(dur);
+
+    var sw = document.createElement("label");
+    sw.className = "switch";
+    var cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = step.enabled;
+    cb.setAttribute("aria-label", "Include " + step.name);
+    sw.appendChild(cb);
+    row.appendChild(sw);
+
+    function applyDuration(v){
+      v = Math.round(Number(v));
+      if(isNaN(v)) v = step.seconds;
+      v = Math.max(5, Math.min(600, v));
+      if(v === step.seconds){ input.value = v; return; }
+      step.seconds = v;
+      onRoutineEdited();
+      input.value = v;
+      meta.textContent = fmt(step.seconds) + " · " + step.cue;
+    }
+    minus.addEventListener("click", function(){ applyDuration(step.seconds - 5); });
+    plus.addEventListener("click", function(){ applyDuration(step.seconds + 5); });
+    input.addEventListener("change", function(){ applyDuration(input.value); });
+    cb.addEventListener("change", function(){
+      step.enabled = cb.checked;
+      row.classList.toggle("off", !step.enabled);
+      onRoutineEdited();
+    });
+
+    stepsList.appendChild(row);
+  });
+}
+
+function onRoutineEdited(){
+  saveState();
+  if(T.mode !== "idle" && T.mode !== "done"){ stopToIdle(); }
+  render();
+}
+
+/* ================= controls wiring ================= */
+el.btnStartPause.addEventListener("click", function(){
+  ensureAudio();
+  if(T.mode === "idle"){ startRoutine(); }
+  else if(T.running){ pauseTimer(false); }
+  else { resumeTimer(); }
+});
+el.btnPrev.addEventListener("click", goPrev);
+el.btnSkip.addEventListener("click", goSkip);
+el.btnRestart.addEventListener("click", function(){
+  stopToIdle();
+  startRoutine();
+});
+el.btnMute.addEventListener("click", function(){
+  prefs.sound = !prefs.sound;
+  saveState();
+  if(!prefs.sound){ try{ if("speechSynthesis" in window) window.speechSynthesis.cancel(); }catch(e){} }
+  else ensureAudio();
+  render();
+});
+el.btnVoice.addEventListener("click", function(){
+  prefs.voice = !prefs.voice;
+  saveState();
+  if(!prefs.voice){ try{ if("speechSynthesis" in window) window.speechSynthesis.cancel(); }catch(e){} }
+  render();
+});
+document.getElementById("btnAgain").addEventListener("click", function(){
+  showView("timer");
+  stopToIdle();
+  startRoutine();
+});
+document.getElementById("btnDoneSteps").addEventListener("click", function(){ showView("steps"); });
+document.getElementById("btnReset").addEventListener("click", function(){
+  steps = cloneDefaults();
+  saveState();
+  buildStepsEditor();
+  stopToIdle();
+  render();
+});
+
+/* prefs toggles */
+var prefSound = document.getElementById("prefSound"),
+    prefVoice = document.getElementById("prefVoice"),
+    prefCount = document.getElementById("prefCountBeeps");
+prefSound.checked = prefs.sound;
+prefVoice.checked = prefs.voice;
+prefCount.checked = prefs.countBeeps;
+prefSound.addEventListener("change", function(){ prefs.sound = prefSound.checked; saveState(); render(); });
+prefVoice.addEventListener("change", function(){ prefs.voice = prefVoice.checked; saveState(); render(); });
+prefCount.addEventListener("change", function(){ prefs.countBeeps = prefCount.checked; saveState(); });
+
+/* ================= background handling ================= */
+document.addEventListener("visibilitychange", function(){
+  if(document.hidden){
+    if(T.running){ pauseTimer(true); }
+  }else{
+    /* back in foreground: stay paused (explicit), but restore wake lock offer on resume */
+    render();
+  }
+});
+window.addEventListener("pagehide", function(){
+  if(T.running){ pauseTimer(true); }
+});
+
+/* keyboard: space = start/pause when timer view visible */
+document.addEventListener("keydown", function(e){
+  if(e.code === "Space" && !viewTimer.classList.contains("hidden") &&
+     !/INPUT|BUTTON|TEXTAREA|SELECT/.test(document.activeElement.tagName)){
+    e.preventDefault();
+    el.btnStartPause.click();
+  }
+});
+
+/* ================= init ================= */
+buildStepsEditor();
+render();
+})();
+</script>
+</body>
+</html>

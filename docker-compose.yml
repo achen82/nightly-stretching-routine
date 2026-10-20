@@ -1,0 +1,8 @@
+services:
+  stretching:
+    build: .
+    image: nightly-stretching:latest
+    container_name: nightly-stretching
+    ports:
+      - "8080:80"
+    restart: unless-stopped
