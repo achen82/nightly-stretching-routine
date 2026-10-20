@@ -244,6 +244,31 @@
     width:100%; font:inherit; font-weight:700; font-size:16px; color:var(--ink); min-height:40px;
     border:none; border-bottom:1.5px dashed var(--line); background:transparent; padding:8px 0; border-radius:0;
   }
+  .step-row{ flex-wrap:wrap; }
+  .step-main{ flex:1 1 190px; }
+  .dur-ctl{ margin-left:auto; margin-top:6px; }
+  .step-row .switch{ margin-top:8px; }
+  .step-name-btn{
+    display:block; width:100%; text-align:left; background:none; border:none; padding:2px 0;
+    font:inherit; font-weight:700; font-size:16px; color:var(--ink); cursor:pointer; line-height:1.3;
+  }
+  .step-name-btn::after{ content:" ✎"; color:var(--accent); font-size:13px; }
+  .modal-overlay{
+    position:fixed; inset:0; z-index:50; background:rgba(0,0,0,.55);
+    display:flex; align-items:flex-start; justify-content:center; padding:6vh 14px 14px;
+  }
+  .modal-sheet{
+    background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:18px;
+    box-shadow:var(--shadow); width:100%; max-width:520px; padding:18px; max-height:88dvh; overflow-y:auto;
+  }
+  .modal-sheet h3{ margin:0 0 4px; font-size:19px; }
+  .modal-note{ font-size:13.5px; color:var(--ink-dim); margin:0 0 8px; }
+  .modal-lbl{ display:block; font-size:13px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-dim); margin:12px 0 5px; }
+  .modal-sheet textarea{
+    width:100%; font:inherit; font-size:17px; line-height:1.4; padding:12px;
+    border:1.5px solid var(--line); border-radius:12px; background:var(--surface); color:var(--ink); resize:vertical;
+  }
+  .modal-sheet textarea:focus{ border-color:var(--accent); outline:none; }
   @media (max-width:380px){ .countdown{ font-size:88px; } .ex-name{ font-size:24px; } }
 </style>
 </head>
@@ -363,7 +388,7 @@
     <div class="card" style="margin-top:0">
       <h2>Your routine</h2>
       <p id="stepsSummary"></p>
-      <p>Toggle steps off, adjust durations, or delete a step with its ✕ button — totals update automatically. Changes are saved on this device and apply the next time you start. Editing stops a run in progress.</p>
+      <p>Toggle steps off, adjust durations, or delete a step with its ✕ button — totals update automatically. Tap a step&rsquo;s name to edit its name and cue in a full-size popup. Changes are saved on this device and apply the next time you start. Editing stops a run in progress.</p>
       <div id="stepsList"></div>
       <div class="btn-row">
         <button id="btnReset" class="danger">Reset to default routine</button>
@@ -386,6 +411,24 @@
       </div>
     </div>
   </section>
+
+  <!-- ============ EDIT POPUP ============ -->
+  <div class="modal-overlay hidden" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+    <div class="modal-sheet">
+      <h3 id="editModalTitle">Edit</h3>
+      <p class="modal-note" id="editModalNote"></p>
+      <label class="modal-lbl" for="editName">Name</label>
+      <textarea id="editName" rows="2"></textarea>
+      <div id="editCueWrap">
+        <label class="modal-lbl" for="editCue">Cue / notes</label>
+        <textarea id="editCue" rows="4"></textarea>
+      </div>
+      <div class="btn-row">
+        <button id="editSave" style="background:var(--accent);border-color:var(--accent);color:var(--accent-ink)">Save</button>
+        <button id="editCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
 
   <footer class="note">Nightly routine · 5-second transitions between every step · tiers, plan and edits save on this device only</footer>
 </div>
@@ -1054,19 +1097,15 @@ function buildStepsEditor(){
 
     var main = document.createElement("div");
     main.className = "step-main";
-    var nm = document.createElement("input");
-    nm.className = "step-name-input";
-    nm.type = "text";
+    var nm = document.createElement("button");
+    nm.type = "button";
+    nm.className = "step-name-btn";
     var sideSuffix = "";
     if(/ — left$/.test(step.name)) sideSuffix = " — left";
     else if(/ — right$/.test(step.name)) sideSuffix = " — right";
-    nm.value = sideSuffix ? step.name.slice(0, step.name.length - sideSuffix.length) : step.name;
-    nm.setAttribute("aria-label", "Step name (editable, base name only)");
-    nm.addEventListener("change", function(){
-      var v = nm.value.trim();
-      if(!v){ nm.value = sideSuffix ? step.name.slice(0, step.name.length - sideSuffix.length) : step.name; return; }
-      if(v + sideSuffix !== step.name){ step.name = v + sideSuffix; onRoutineEdited(); }
-    });
+    nm.textContent = sideSuffix ? step.name.slice(0, step.name.length - sideSuffix.length) : step.name;
+    nm.setAttribute("aria-label", "Edit name and cue for " + step.name);
+    nm.addEventListener("click", function(){ openStepEditor(step, sideSuffix); });
     var meta = document.createElement("div");
     meta.className = "step-meta"; meta.textContent = fmt(step.seconds) + " · " + step.cue;
     main.appendChild(nm);
@@ -1266,6 +1305,66 @@ function renameGroup(gid, newName){
   render();
 }
 
+var modalCtx = null;
+function openEditModal(ctx){
+  modalCtx = ctx;
+  document.getElementById("editModalTitle").textContent = ctx.title || "Edit";
+  var note = document.getElementById("editModalNote");
+  note.textContent = ctx.note || "";
+  note.style.display = ctx.note ? "" : "none";
+  var nameF = document.getElementById("editName");
+  nameF.value = ctx.name || "";
+  var cueWrap = document.getElementById("editCueWrap");
+  if(typeof ctx.cue === "string"){
+    cueWrap.classList.remove("hidden");
+    document.getElementById("editCue").value = ctx.cue;
+  }else{
+    cueWrap.classList.add("hidden");
+  }
+  document.getElementById("editModal").classList.remove("hidden");
+  setTimeout(function(){ nameF.focus(); nameF.select(); }, 60);
+}
+function closeEditModal(){
+  document.getElementById("editModal").classList.add("hidden");
+  modalCtx = null;
+}
+document.getElementById("editSave").addEventListener("click", function(){
+  if(!modalCtx) return;
+  var ctx = modalCtx;
+  var nv = document.getElementById("editName").value;
+  var cv = document.getElementById("editCue").value;
+  closeEditModal();
+  ctx.onSave(nv, cv);
+});
+document.getElementById("editCancel").addEventListener("click", closeEditModal);
+document.getElementById("editModal").addEventListener("click", function(e){
+  if(e.target === this) closeEditModal();
+});
+document.addEventListener("keydown", function(e){
+  if(e.key === "Escape" && modalCtx) closeEditModal();
+});
+
+function openStepEditor(step, sideSuffix){
+  var base = sideSuffix ? step.name.slice(0, step.name.length - sideSuffix.length) : step.name;
+  openEditModal({
+    title: "Edit step",
+    note: sideSuffix ? ("Side: " + (sideSuffix === " — left" ? "LEFT" : "RIGHT") + " — the side is added automatically; just edit the base name.") : "",
+    name: base,
+    cue: step.cue,
+    onSave: function(newName, newCue){
+      newName = String(newName || "").trim();
+      if(newName) step.name = newName + sideSuffix;
+      if(typeof newCue === "string") step.cue = newCue.trim();
+      tonightIds = null;
+      saveState();
+      buildStepsEditor();
+      buildBoard();
+      renderPlan();
+      render();
+    }
+  });
+}
+
 function deleteGroup(gid){
   steps = steps.filter(function(s){ return s.group !== gid; });
   if(DEFAULT_GROUP_TIER.hasOwnProperty(gid) && deletedGroups.indexOf(gid) < 0) deletedGroups.push(gid);
@@ -1429,30 +1528,13 @@ function groupCard(g){
   ren.textContent = "Rename";
   ren.setAttribute("aria-label", "Rename " + g.name);
   ren.addEventListener("click", function(){
-    var input = document.createElement("input");
-    input.type = "text";
-    input.className = "rename-input";
-    input.value = g.name;
-    input.setAttribute("aria-label", "New name for " + g.name);
-    nm.parentNode.replaceChild(input, nm);
-    ctl.classList.add("hidden");
-    var row = document.createElement("div");
-    row.className = "gcard-ctl rename-row";
-    var saveB = document.createElement("button");
-    saveB.textContent = "Save name";
-    saveB.addEventListener("click", function(){ renameGroup(g.id, input.value); });
-    var cancelB = document.createElement("button");
-    cancelB.textContent = "Cancel";
-    cancelB.addEventListener("click", function(){ buildBoard(); });
-    input.addEventListener("keydown", function(e){
-      if(e.key === "Enter") renameGroup(g.id, input.value);
-      if(e.key === "Escape") buildBoard();
+    openEditModal({
+      title: "Rename exercise",
+      note: "Renames the exercise everywhere, including its left/right steps.",
+      name: g.name,
+      cue: null,
+      onSave: function(newName){ renameGroup(g.id, newName); }
     });
-    row.appendChild(saveB);
-    row.appendChild(cancelB);
-    card.appendChild(row);
-    input.focus();
-    input.select();
   });
   ctl.appendChild(ren);
 
