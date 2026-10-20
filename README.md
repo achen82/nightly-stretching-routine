@@ -1,9 +1,13 @@
 # Nightly Stretching Routine
 
-A mobile-first stretching timer web app: a fixed 28-step nightly routine
-(17:00 total — 14:45 of stretching plus 27 × 5-second transitions), with a
-large countdown, audible cues, and editable steps. The whole app is one
-self-contained `index.html` file — no build step, no dependencies.
+A mobile-first stretching timer web app: a 32-step nightly routine
+(19:20 total — 16:45 of stretching plus 31 × 5-second transitions), with a
+large countdown, audible cues, and editable steps. Includes a Plan & Tiers
+tab: rank exercises in tiers A (most important) to F, drag the time slider
+(5:00 up to the full routine, 30-second steps) and the app builds tonight's
+routine from your top tiers; skip exercises for the night, and add your own
+exercises with custom durations (30 seconds by default). The whole app is
+one self-contained `index.html` file — no build step, no dependencies.
 
 ## Run it on a Raspberry Pi (Docker)
 

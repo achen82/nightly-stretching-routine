@@ -177,6 +177,52 @@
 
   .hidden{ display:none !important; }
   footer.note{ margin-top:18px; font-size:12.5px; color:var(--ink-dim); text-align:center; }
+
+  /* ---------- plan & tiers ---------- */
+  .budget-line{ display:flex; align-items:baseline; gap:10px; margin:8px 0 2px; flex-wrap:wrap; }
+  .budget-line strong{ font-size:26px; font-variant-numeric:tabular-nums; }
+  .budget-line span{ font-size:13.5px; color:var(--ink-dim); }
+  input[type="range"]{ width:100%; accent-color:var(--accent); height:36px; }
+  .plan-list{ margin:10px 0 0; padding:0; list-style:none; }
+  .plan-list li{ padding:6px 0; border-bottom:1px solid var(--line); font-size:14.5px; display:flex; justify-content:space-between; gap:10px; }
+  .plan-list li:last-child{ border-bottom:none; }
+  .plan-list .t{ color:var(--ink-dim); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .cut-line{ font-size:13.5px; color:var(--ink-dim); margin-top:10px; }
+  .tier-row{ border:1.5px solid var(--line); border-radius:14px; padding:10px; margin-top:10px; background:var(--surface2); }
+  .tier-row.drop-hint{ border-color:var(--accent); }
+  .tier-head{ display:flex; align-items:center; gap:8px; margin:0 0 8px; }
+  .tier-badge{
+    display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px;
+    border-radius:9px; font-weight:800; font-size:16px; color:#fff; background:#64748b;
+  }
+  .tier-badge.tA{ background:#dc2626; } .tier-badge.tB{ background:#ea580c; }
+  .tier-badge.tC{ background:#ca8a04; } .tier-badge.tD{ background:#16a34a; }
+  .tier-badge.tE{ background:#0284c7; } .tier-badge.tF{ background:#7c3aed; }
+  .tier-sub{ font-size:13px; color:var(--ink-dim); font-weight:600; }
+  .tier-empty{ font-size:13px; color:var(--ink-dim); padding:6px 2px; }
+  .gcard{
+    background:var(--surface); border:1.5px solid var(--line); border-radius:12px;
+    padding:10px; margin-top:8px;
+  }
+  .gcard:first-child{ margin-top:0; }
+  .gcard.skipped{ opacity:.55; }
+  .gcard.dragging{ opacity:.85; box-shadow:var(--shadow); position:relative; z-index:5; }
+  .gcard-name{ font-weight:700; font-size:15px; }
+  .gcard-meta{ font-size:12.5px; color:var(--ink-dim); }
+  .gcard-ctl{ display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; align-items:center; }
+  .gcard-ctl button, .gcard-ctl select{
+    font:inherit; font-size:13.5px; font-weight:700; border-radius:9px; border:1.5px solid var(--line);
+    background:var(--surface); color:var(--ink); padding:7px 9px; min-height:36px;
+  }
+  .gcard-ctl .drag-handle{ cursor:grab; touch-action:none; font-size:16px; padding:7px 12px; }
+  .gcard-ctl .skip-btn[aria-pressed="true"]{ background:var(--danger); border-color:var(--danger); color:#fff; }
+  .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px; }
+  .form-grid label{ font-size:13px; font-weight:700; display:block; }
+  .form-grid input, .form-grid select{
+    width:100%; margin-top:4px; font:inherit; font-size:15px; padding:10px;
+    border:1.5px solid var(--line); border-radius:10px; background:var(--surface); color:var(--ink);
+  }
+  .form-wide{ grid-column:1 / -1; }
   @media (max-width:380px){ .countdown{ font-size:88px; } .ex-name{ font-size:24px; } }
 </style>
 </head>
@@ -190,6 +236,7 @@
 
   <nav class="tabs" role="tablist" aria-label="Views">
     <button id="tabTimer" role="tab" aria-selected="true">Timer</button>
+    <button id="tabPlan" role="tab" aria-selected="false">Plan &amp; Tiers</button>
     <button id="tabSteps" role="tab" aria-selected="false">Steps &amp; Settings</button>
   </nav>
 
@@ -232,7 +279,7 @@
     <div class="card">
       <h2>Technique &amp; safety</h2>
       <ul>
-        <li>Don’t roll directly over the back of the knee, kneecap, Achilles tendon, IT band, or prominent hip bone.</li>
+        <li>Don’t roll directly over the back of the knee, kneecap, Achilles tendon, or prominent hip bone. On the IT band rollout, keep passes slow and tolerable and stop above the knee.</li>
         <li>Glute work stays on <strong>muscle tissue</strong> with comfortable pressure. Stop for sharp pain, numbness, tingling, or pain shooting down the leg.</li>
         <li>Avoid forceful calf stretching if it causes Achilles insertion pain. Every stretch should feel gentle, never painful.</li>
         <li>This is a mobility and comfort routine, not treatment for an injury — worsening or persistent pain warrants proper evaluation.</li>
@@ -253,6 +300,43 @@
     </div>
   </section>
 
+
+  <!-- ============ PLAN & TIERS VIEW ============ -->
+  <section id="viewPlan" class="hidden">
+    <div class="card" style="margin-top:0">
+      <h2>Tonight&rsquo;s time budget</h2>
+      <p>Set the time you have. The planner fills it from your top tiers down &mdash; counting each exercise&rsquo;s duration plus the 5-second transitions &mdash; and tonight&rsquo;s picks run in the normal routine order.</p>
+      <input type="range" id="budgetRange" min="300" step="30" value="300" aria-label="Time budget in seconds">
+      <div class="budget-line"><strong id="budgetLabel">5:00</strong><span id="budgetMeta"></span></div>
+      <div id="planOut"></div>
+      <div class="btn-row">
+        <button id="btnStartPlan" style="background:var(--accent);border-color:var(--accent);color:var(--accent-ink)">&nbsp;&#9654; Start tonight&rsquo;s routine</button>
+        <button id="btnClearPlan">Full routine instead</button>
+      </div>
+      <p id="planNote"></p>
+    </div>
+
+    <div class="card">
+      <h2>Tiers &mdash; A most important, F first to cut</h2>
+      <p>Drag a card by its handle (or use its tier menu and arrows) to re-rank. <strong>Skip tonight</strong> knocks an exercise out of the plan entirely, whatever the budget. Rankings save on this device.</p>
+      <div id="tierBoard"></div>
+    </div>
+
+    <div class="card">
+      <h2>Add an exercise</h2>
+      <p>New exercises default to <strong>30 seconds</strong> &mdash; change the duration here, or later in Steps &amp; Settings.</p>
+      <div class="form-grid">
+        <div class="form-wide"><label for="newName">Name</label><input id="newName" type="text" placeholder="e.g. Pigeon stretch" autocomplete="off"></div>
+        <div><label for="newSeconds">Duration (sec)</label><input id="newSeconds" type="number" min="5" max="600" step="5" value="30"></div>
+        <div><label for="newSides">Sides</label><select id="newSides"><option value="pair">Left / right pair</option><option value="single">Single</option></select></div>
+        <div><label for="newPhase">Phase</label><select id="newPhase"><option>Roll / massage</option><option>Floor stretches / mobility</option><option>Wall / doorway finish</option></select></div>
+        <div><label for="newTier">Tier</label><select id="newTier"><option>A</option><option>B</option><option selected>C</option><option>D</option><option>E</option><option>F</option></select></div>
+      </div>
+      <div class="btn-row"><button id="btnAddExercise" style="background:var(--accent);border-color:var(--accent);color:var(--accent-ink)">Add exercise</button></div>
+      <p id="addNote"></p>
+    </div>
+  </section>
+
   <!-- ============ STEPS / SETTINGS VIEW ============ -->
   <section id="viewSteps" class="hidden">
     <div class="card" style="margin-top:0">
@@ -261,7 +345,7 @@
       <p>Toggle steps off or adjust durations — totals update automatically. Changes are saved on this device and apply the next time you start. Editing stops a run in progress.</p>
       <div id="stepsList"></div>
       <div class="btn-row">
-        <button id="btnReset" class="danger">Reset to default 17:00 routine</button>
+        <button id="btnReset" class="danger">Reset to default routine</button>
       </div>
     </div>
 
@@ -282,7 +366,7 @@
     </div>
   </section>
 
-  <footer class="note">28-step nightly routine · 5-second transitions between every step · edits save on this device only</footer>
+  <footer class="note">Nightly routine · 5-second transitions between every step · tiers, plan and edits save on this device only</footer>
 </div>
 
 <script>
@@ -293,92 +377,161 @@
 var TRANSITION_SECONDS = 5;
 
 var DEFAULT_STEPS = [
-  {id:"s1",  phase:"Roll / massage", name:"Calf rolling — left", seconds:30, cue:"Roll calf muscle from above the Achilles to below the knee; rotate leg to cover angles; avoid knee crease."},
-  {id:"s2",  phase:"Roll / massage", name:"Calf rolling — right", seconds:30, cue:"Same as left; do not press directly on the Achilles tendon."},
-  {id:"s3",  phase:"Roll / massage", name:"Quad rolling — left", seconds:30, cue:"Use Roll Recovery R8 or foam roller. Stay on the quad muscle, not the kneecap or tendons."},
-  {id:"s4",  phase:"Roll / massage", name:"Quad rolling — right", seconds:30, cue:"Same as left."},
-  {id:"s5",  phase:"Roll / massage", name:"Tennis ball — upper-outer left glute", seconds:30, cue:"Target the fleshy upper-outer glute near—but not directly on—the hip bone."},
-  {id:"s6",  phase:"Roll / massage", name:"Tennis ball — upper-outer right glute", seconds:30, cue:"Same as left. Use tolerable, moderate pressure."},
-  {id:"s7",  phase:"Roll / massage", name:"Tennis ball — deeper left glute", seconds:30, cue:"Target the fleshy buttock area using gentle pressure; avoid sharp, radiating, or tingling sensations."},
-  {id:"s8",  phase:"Roll / massage", name:"Tennis ball — deeper right glute", seconds:30, cue:"Same as left. Do not press directly on bony points or the sciatic nerve pathway."},
-  {id:"s9",  phase:"Floor stretches / mobility", name:"Couch stretch — left", seconds:45, cue:"Quad and hip flexor. Keep pelvis gently tucked, without arching the lower back."},
-  {id:"s10", phase:"Floor stretches / mobility", name:"Couch stretch — right", seconds:45, cue:"Same as left. Ease off if front-of-knee pressure is uncomfortable."},
-  {id:"s11", phase:"Floor stretches / mobility", name:"Pretzel stretch — left", seconds:30, cue:"Use your preferred pretzel variation; gentle glute/hip stretch without forcing the spine."},
-  {id:"s12", phase:"Floor stretches / mobility", name:"Pretzel stretch — right", seconds:30, cue:"Same as left."},
-  {id:"s13", phase:"Floor stretches / mobility", name:"Figure-four stretch — left", seconds:30, cue:"Gentle deep-glute/hip stretch; don’t force the knee."},
-  {id:"s14", phase:"Floor stretches / mobility", name:"Figure-four stretch — right", seconds:30, cue:"Same as left."},
-  {id:"s15", phase:"Floor stretches / mobility", name:"Hamstring stretch — left", seconds:30, cue:"Relaxed position with a small knee bend if needed; no bouncing."},
-  {id:"s16", phase:"Floor stretches / mobility", name:"Hamstring stretch — right", seconds:30, cue:"Same as left."},
-  {id:"s17", phase:"Floor stretches / mobility", name:"Butterfly stretch", seconds:45, cue:"Feet together, knees gently toward floor; focus on inner thighs, without pressing on knees."},
-  {id:"s18", phase:"Floor stretches / mobility", name:"Open-book rotations — left", seconds:30, cue:"About five slow reps, moving comfortably through upper-back rotation."},
-  {id:"s19", phase:"Floor stretches / mobility", name:"Open-book rotations — right", seconds:30, cue:"About five slow reps."},
-  {id:"s20", phase:"Wall / doorway finish", name:"Straight-knee calf stretch — left", seconds:30, cue:"Emphasize gastrocnemius; heel down, knee straight but not locked."},
-  {id:"s21", phase:"Wall / doorway finish", name:"Straight-knee calf stretch — right", seconds:30, cue:"Same as left."},
-  {id:"s22", phase:"Wall / doorway finish", name:"Bent-knee calf stretch — left", seconds:30, cue:"Emphasize soleus; heel stays down as knee bends gently."},
-  {id:"s23", phase:"Wall / doorway finish", name:"Bent-knee calf stretch — right", seconds:30, cue:"Same as left."},
-  {id:"s24", phase:"Wall / doorway finish", name:"Doorway chest stretch — left", seconds:30, cue:"Gentle chest/front-shoulder opening; avoid overstretching shoulder."},
-  {id:"s25", phase:"Wall / doorway finish", name:"Doorway chest stretch — right", seconds:30, cue:"Same as left."},
-  {id:"s26", phase:"Wall / doorway finish", name:"Upper-trap neck stretch — left", seconds:30, cue:"Gentle ear-to-shoulder tilt; avoid pulling hard on head."},
-  {id:"s27", phase:"Wall / doorway finish", name:"Upper-trap neck stretch — right", seconds:30, cue:"Same as left."},
-  {id:"s28", phase:"Wall / doorway finish", name:"Chin tucks", seconds:30, cue:"About five slow, controlled reps; move straight back rather than looking downward."}
+  {id:"s1",  group:"g-calf", phase:"Roll / massage", name:"Calf rolling — left", seconds:30, cue:"Roll calf muscle from above the Achilles to below the knee; rotate leg to cover angles; avoid knee crease."},
+  {id:"s2",  group:"g-calf", phase:"Roll / massage", name:"Calf rolling — right", seconds:30, cue:"Same as left; do not press directly on the Achilles tendon."},
+  {id:"s33", group:"g-backcalf", phase:"Roll / massage", name:"Back of calf rollout — left", seconds:30, cue:"Second, slower pass over the back of the calf, above the Achilles to below the knee; avoid the knee crease."},
+  {id:"s34", group:"g-backcalf", phase:"Roll / massage", name:"Back of calf rollout — right", seconds:30, cue:"Same as left; do not press directly on the Achilles tendon."},
+  {id:"s3",  group:"g-quad", phase:"Roll / massage", name:"Quad rolling — left", seconds:30, cue:"Use Roll Recovery R8 or foam roller. Stay on the quad muscle, not the kneecap or tendons."},
+  {id:"s4",  group:"g-quad", phase:"Roll / massage", name:"Quad rolling — right", seconds:30, cue:"Same as left."},
+  {id:"s31", group:"g-itband", phase:"Roll / massage", name:"IT band rollout — left", seconds:30, cue:"Foam roll the outer thigh from hip toward knee in slow passes; keep pressure tolerable and stop above the knee."},
+  {id:"s32", group:"g-itband", phase:"Roll / massage", name:"IT band rollout — right", seconds:30, cue:"Same as left."},
+  {id:"s5",  group:"g-glute", phase:"Roll / massage", name:"Tennis ball — upper-outer left glute", seconds:30, cue:"Target the fleshy upper-outer glute near—but not directly on—the hip bone."},
+  {id:"s6",  group:"g-glute", phase:"Roll / massage", name:"Tennis ball — upper-outer right glute", seconds:30, cue:"Same as left. Use tolerable, moderate pressure."},
+  {id:"s7",  group:"g-glute", phase:"Roll / massage", name:"Tennis ball — deeper left glute", seconds:30, cue:"Target the fleshy buttock area using gentle pressure; avoid sharp, radiating, or tingling sensations."},
+  {id:"s8",  group:"g-glute", phase:"Roll / massage", name:"Tennis ball — deeper right glute", seconds:30, cue:"Same as left. Do not press directly on bony points or the sciatic nerve pathway."},
+  {id:"s9",  group:"g-couch", phase:"Floor stretches / mobility", name:"Couch stretch — left", seconds:45, cue:"Quad and hip flexor. Keep pelvis gently tucked, without arching the lower back."},
+  {id:"s10", group:"g-couch", phase:"Floor stretches / mobility", name:"Couch stretch — right", seconds:45, cue:"Same as left. Ease off if front-of-knee pressure is uncomfortable."},
+  {id:"s11", group:"g-pretzel", phase:"Floor stretches / mobility", name:"Pretzel stretch — left", seconds:30, cue:"Use your preferred pretzel variation; gentle glute/hip stretch without forcing the spine."},
+  {id:"s12", group:"g-pretzel", phase:"Floor stretches / mobility", name:"Pretzel stretch — right", seconds:30, cue:"Same as left."},
+  {id:"s13", group:"g-fig4", phase:"Floor stretches / mobility", name:"Figure-four stretch — left", seconds:30, cue:"Gentle deep-glute/hip stretch; don’t force the knee."},
+  {id:"s14", group:"g-fig4", phase:"Floor stretches / mobility", name:"Figure-four stretch — right", seconds:30, cue:"Same as left."},
+  {id:"s15", group:"g-hamstring", phase:"Floor stretches / mobility", name:"Hamstring stretch — left", seconds:30, cue:"Relaxed position with a small knee bend if needed; no bouncing."},
+  {id:"s16", group:"g-hamstring", phase:"Floor stretches / mobility", name:"Hamstring stretch — right", seconds:30, cue:"Same as left."},
+  {id:"s17", group:"g-butterfly", phase:"Floor stretches / mobility", name:"Butterfly stretch", seconds:45, cue:"Feet together, knees gently toward floor; focus on inner thighs, without pressing on knees."},
+  {id:"s29", group:"g-neckknot", phase:"Floor stretches / mobility", name:"Back of neck knot — left", seconds:30, cue:"Lying on your back, tennis ball under the base of the skull on the left side; small gentle nods, comfortable pressure only."},
+  {id:"s30", group:"g-neckknot", phase:"Floor stretches / mobility", name:"Back of neck knot — right", seconds:30, cue:"Same as left."},
+  {id:"s20", group:"g-straightcalf", phase:"Wall / doorway finish", name:"Straight-knee calf stretch — left", seconds:30, cue:"Emphasize gastrocnemius; heel down, knee straight but not locked."},
+  {id:"s21", group:"g-straightcalf", phase:"Wall / doorway finish", name:"Straight-knee calf stretch — right", seconds:30, cue:"Same as left."},
+  {id:"s22", group:"g-bentcalf", phase:"Wall / doorway finish", name:"Bent-knee calf stretch — left", seconds:30, cue:"Emphasize soleus; heel stays down as knee bends gently."},
+  {id:"s23", group:"g-bentcalf", phase:"Wall / doorway finish", name:"Bent-knee calf stretch — right", seconds:30, cue:"Same as left."},
+  {id:"s24", group:"g-chest", phase:"Wall / doorway finish", name:"Doorway chest stretch — left", seconds:30, cue:"Gentle chest/front-shoulder opening; avoid overstretching shoulder."},
+  {id:"s25", group:"g-chest", phase:"Wall / doorway finish", name:"Doorway chest stretch — right", seconds:30, cue:"Same as left."},
+  {id:"s26", group:"g-neck", phase:"Wall / doorway finish", name:"Upper-trap neck stretch — left", seconds:30, cue:"Gentle ear-to-shoulder tilt; avoid pulling hard on head."},
+  {id:"s27", group:"g-neck", phase:"Wall / doorway finish", name:"Upper-trap neck stretch — right", seconds:30, cue:"Same as left."},
+  {id:"s28", group:"g-chin", phase:"Wall / doorway finish", name:"Chin tucks", seconds:30, cue:"About five slow, controlled reps; move straight back rather than looking downward."}
 ];
 
+var GROUP_META = {
+  "g-calf":{name:"Calf rolling"}, "g-backcalf":{name:"Back of calf rollout"},
+  "g-quad":{name:"Quad rolling"}, "g-itband":{name:"IT band rollout"},
+  "g-glute":{name:"Tennis ball — glute"}, "g-couch":{name:"Couch stretch"},
+  "g-pretzel":{name:"Pretzel stretch"}, "g-fig4":{name:"Figure-four stretch"},
+  "g-hamstring":{name:"Hamstring stretch"}, "g-butterfly":{name:"Butterfly stretch"},
+  "g-neckknot":{name:"Back of neck knot"}, "g-straightcalf":{name:"Straight-knee calf stretch"},
+  "g-bentcalf":{name:"Bent-knee calf stretch"}, "g-chest":{name:"Doorway chest stretch"},
+  "g-neck":{name:"Upper-trap neck stretch"}, "g-chin":{name:"Chin tucks"}
+};
+var TIERS = ["A","B","C","D","E","F"];
+var TIER_SUB = {A:"Essential", B:"High", C:"Medium", D:"Low", E:"Optional", F:"First to cut"};
+var DEFAULT_GROUP_TIER = {
+  "g-glute":"A", "g-couch":"A", "g-fig4":"A",
+  "g-calf":"B", "g-backcalf":"B", "g-itband":"B", "g-hamstring":"B", "g-straightcalf":"B",
+  "g-quad":"C", "g-pretzel":"C", "g-butterfly":"C", "g-neckknot":"C",
+  "g-bentcalf":"D", "g-chest":"E", "g-neck":"F", "g-chin":"F"
+};
+/* global priority order: tier A first (in listed order), then B, ... */
+var DEFAULT_GROUP_ORDER = ["g-glute","g-couch","g-fig4",
+  "g-calf","g-backcalf","g-itband","g-hamstring","g-straightcalf",
+  "g-quad","g-pretzel","g-butterfly","g-neckknot",
+  "g-bentcalf","g-chest","g-neck","g-chin"];
+
 /* ================= persistence (this device only) ================= */
-var LS_KEY = "nightly-stretching-v1";
+var LS_KEY = "nightly-stretching-v2";
+var LS_KEY_V1 = "nightly-stretching-v1";
 var storeOK = true;
-function loadState(){
+function loadRaw(key){
   try{
-    var raw = localStorage.getItem(LS_KEY);
-    if(!raw) return null;
-    return JSON.parse(raw);
-  }catch(e){ storeOK = false; return null; }
+    var raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
 }
 function saveState(){
   if(!storeOK) return;
   try{
-    localStorage.setItem(LS_KEY, JSON.stringify({steps:steps, prefs:prefs}));
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      steps:steps, prefs:prefs, groupTier:groupTier, groupOrder:groupOrder,
+      skipGroups:skipGroups, tonightIds:tonightIds, planBudgetSec:planBudgetSec, groupMeta:customMeta()
+    }));
   }catch(e){ storeOK = false; }
 }
 
 function cloneDefaults(){
   return DEFAULT_STEPS.map(function(s){
-    return {id:s.id, phase:s.phase, name:s.name, seconds:s.seconds, cue:s.cue, enabled:true};
+    return {id:s.id, group:s.group, phase:s.phase, name:s.name, seconds:s.seconds, cue:s.cue, enabled:true};
   });
+}
+function defaultGroupTier(){ var o = {}; for(var k in DEFAULT_GROUP_TIER) o[k] = DEFAULT_GROUP_TIER[k]; return o; }
+function clampSec(v, dflt){
+  v = Math.round(Number(v));
+  if(isNaN(v)) return dflt;
+  return Math.max(5, Math.min(600, v));
 }
 
-var saved = loadState();
-var steps, prefs;
-if(saved && Array.isArray(saved.steps) && saved.steps.length){
-  /* merge saved values onto defaults so new fields/structure stay sane */
-  var byId = {};
-  saved.steps.forEach(function(s){ byId[s.id] = s; });
-  steps = DEFAULT_STEPS.map(function(d){
-    var s = byId[d.id];
-    return {
-      id:d.id, phase:d.phase, name:d.name, cue:d.cue,
-      seconds: (s && typeof s.seconds === "number" && s.seconds >= 5 && s.seconds <= 600) ? Math.round(s.seconds) : d.seconds,
-      enabled: s ? s.enabled !== false : true
-    };
-  });
-  prefs = { sound:true, voice:true, countBeeps:true };
-  if(saved.prefs){
-    if(typeof saved.prefs.sound === "boolean") prefs.sound = saved.prefs.sound;
-    if(typeof saved.prefs.voice === "boolean") prefs.voice = saved.prefs.voice;
-    if(typeof saved.prefs.countBeeps === "boolean") prefs.countBeeps = saved.prefs.countBeeps;
-  }
-}else{
+var steps, prefs, groupTier, groupOrder, skipGroups, tonightIds, planBudgetSec;
+(function initState(){
   steps = cloneDefaults();
   prefs = { sound:true, voice:true, countBeeps:true };
-}
+  groupTier = defaultGroupTier();
+  groupOrder = DEFAULT_GROUP_ORDER.slice();
+  skipGroups = [];
+  tonightIds = null;
+  planBudgetSec = null;
+
+  var v2 = loadRaw(LS_KEY);
+  if(v2 && Array.isArray(v2.steps) && v2.steps.length){
+    steps = v2.steps.filter(function(s){ return s && s.id && s.name; }).map(function(s){
+      return { id:String(s.id), group:String(s.group || ("g-" + s.id)), phase:String(s.phase || ""),
+        name:String(s.name), seconds:clampSec(s.seconds, 30), cue:String(s.cue || ""), enabled: s.enabled !== false };
+    });
+    if(v2.prefs){
+      if(typeof v2.prefs.sound === "boolean") prefs.sound = v2.prefs.sound;
+      if(typeof v2.prefs.voice === "boolean") prefs.voice = v2.prefs.voice;
+      if(typeof v2.prefs.countBeeps === "boolean") prefs.countBeeps = v2.prefs.countBeeps;
+    }
+    if(v2.groupTier){ for(var k in v2.groupTier){ if(TIERS.indexOf(v2.groupTier[k]) >= 0) groupTier[k] = v2.groupTier[k]; } }
+    if(Array.isArray(v2.groupOrder) && v2.groupOrder.length) groupOrder = v2.groupOrder.slice();
+    if(Array.isArray(v2.skipGroups)) skipGroups = v2.skipGroups.slice();
+    if(Array.isArray(v2.tonightIds)) tonightIds = v2.tonightIds.slice();
+    if(typeof v2.planBudgetSec === "number") planBudgetSec = v2.planBudgetSec;
+    if(v2.groupMeta){ for(var gm in v2.groupMeta){ GROUP_META[gm] = {name:String(v2.groupMeta[gm])}; } }
+  }else{
+    var v1 = loadRaw(LS_KEY_V1);
+    if(v1 && Array.isArray(v1.steps)){
+      var byId = {};
+      v1.steps.forEach(function(s){ if(s && s.id) byId[s.id] = s; });
+      steps = steps.map(function(d){
+        var s = byId[d.id];
+        if(!s) return d;
+        return { id:d.id, group:d.group, phase:d.phase, name:d.name, cue:d.cue,
+          seconds: clampSec(s.seconds, d.seconds), enabled: s.enabled !== false };
+      });
+      if(v1.prefs){
+        if(typeof v1.prefs.sound === "boolean") prefs.sound = v1.prefs.sound;
+        if(typeof v1.prefs.voice === "boolean") prefs.voice = v1.prefs.voice;
+        if(typeof v1.prefs.countBeeps === "boolean") prefs.countBeeps = v1.prefs.countBeeps;
+      }
+    }
+  }
+  /* make sure every group present in steps has a tier and an order slot */
+  var seen = {};
+  steps.forEach(function(s){
+    if(seen[s.group]) return;
+    seen[s.group] = true;
+    if(!groupTier[s.group]) groupTier[s.group] = "C";
+    if(groupOrder.indexOf(s.group) < 0) groupOrder.push(s.group);
+  });
+  groupOrder = groupOrder.filter(function(g){ return seen[g]; });
+})();
 
 /* ================= derived ================= */
 function enabledSteps(){ return steps.filter(function(s){ return s.enabled; }); }
-function totals(){
-  var en = enabledSteps();
-  var active = en.reduce(function(a,s){ return a + s.seconds; }, 0);
-  var trans = Math.max(0, en.length - 1);
-  return { count: en.length, active: active, transitions: trans, total: active + trans * TRANSITION_SECONDS };
+function totalsFor(list){
+  var active = list.reduce(function(a,s){ return a + s.seconds; }, 0);
+  var trans = Math.max(0, list.length - 1);
+  return { count: list.length, active: active, transitions: trans, total: active + trans * TRANSITION_SECONDS };
 }
+function totals(){ return totalsFor(currentList()); }
+function libTotals(){ return totalsFor(enabledSteps()); }
 function fmt(sec){
   sec = Math.max(0, Math.round(sec));
   var m = Math.floor(sec / 60), s = sec % 60;
@@ -388,6 +541,54 @@ function sideOf(name){
   if(/— left\b/.test(name) || / left glute/.test(name)) return "LEFT";
   if(/— right\b/.test(name) || / right glute/.test(name)) return "RIGHT";
   return "";
+}
+
+/* groups in performance order, built from enabled steps */
+function groupsOf(){
+  var out = [], byId = {};
+  enabledSteps().forEach(function(s){
+    if(!byId[s.group]){
+      byId[s.group] = { id:s.group, name:(GROUP_META[s.group] ? GROUP_META[s.group].name : s.name),
+        phase:s.phase, tier:groupTier[s.group] || "C", steps:[] };
+      out.push(byId[s.group]);
+    }
+    byId[s.group].steps.push(s);
+  });
+  return out;
+}
+function groupStepsSec(g){
+  return g.steps.reduce(function(a,s){ return a + s.seconds; }, 0);
+}
+function groupAloneSec(g){ /* steps + internal transitions */
+  return groupStepsSec(g) + Math.max(0, g.steps.length - 1) * TRANSITION_SECONDS;
+}
+function isSkipped(gid){ return skipGroups.indexOf(gid) >= 0; }
+/* enabled, non-skipped groups in priority order */
+function priorityGroups(){
+  var gs = groupsOf().filter(function(g){ return !isSkipped(g.id); });
+  gs.sort(function(a,b){ return groupOrder.indexOf(a.id) - groupOrder.indexOf(b.id); });
+  return gs;
+}
+/* greedy fill: walk priority order, take a group if its marginal cost fits */
+function computePlan(budgetSec){
+  var picked = [], pickedIds = {}, usedSteps = 0, usedSec = 0;
+  priorityGroups().forEach(function(g){
+    var cost = groupStepsSec(g) + Math.max(0, g.steps.length - 1) * TRANSITION_SECONDS + (usedSteps > 0 ? TRANSITION_SECONDS : 0);
+    if(usedSec + cost <= budgetSec){
+      picked.push(g); usedSec += cost; usedSteps += g.steps.length;
+      g.steps.forEach(function(s){ pickedIds[s.id] = true; });
+    }
+  });
+  var orderedSteps = enabledSteps().filter(function(s){ return pickedIds[s.id]; });
+  var cut = groupsOf().filter(function(g){ return !isSkipped(g.id) && !picked.some(function(p){ return p.id === g.id; }); });
+  var skipped = groupsOf().filter(function(g){ return isSkipped(g.id); });
+  return { steps:orderedSteps, groups:picked, cut:cut, skipped:skipped,
+           totalSec: totalsFor(orderedSteps).total, budgetSec: budgetSec };
+}
+function planMaxSec(){
+  var list = [];
+  priorityGroups().forEach(function(g){ g.steps.forEach(function(s){ list.push(s); }); });
+  return totalsFor(list).total;
 }
 
 /* ================= audio ================= */
@@ -463,7 +664,15 @@ var T = {
   pausedByBackground: false
 };
 
-function currentList(){ return enabledSteps(); }
+function currentList(){
+  if(tonightIds && tonightIds.length){
+    var set = {};
+    tonightIds.forEach(function(id){ set[id] = true; });
+    var list = enabledSteps().filter(function(s){ return set[s.id]; });
+    if(list.length) return list;
+  }
+  return enabledSteps();
+}
 
 function segmentDurationMs(){
   if(T.mode === "exercise"){
@@ -662,8 +871,9 @@ function render(){
   var t = totals();
   el.totalsLine.innerHTML = "<strong>" + fmt(t.total) + "</strong> total<br>" +
     t.count + " steps · " + t.transitions + " transitions";
-  el.stepsSummary.textContent = t.count + " steps enabled · " + fmt(t.active) + " active · " +
-    t.transitions + " transitions × " + TRANSITION_SECONDS + "s · " + fmt(t.total) + " total";
+  var lt = libTotals();
+  el.stepsSummary.textContent = lt.count + " steps enabled · " + fmt(lt.active) + " active · " +
+    lt.transitions + " transitions × " + TRANSITION_SECONDS + "s · " + fmt(lt.total) + " total (full routine)";
 
   var list = currentList();
   el.timerCard.classList.toggle("transitioning", T.mode === "transition");
@@ -744,19 +954,25 @@ function setProgress(frac){
 /* ================= views ================= */
 var viewTimer = document.getElementById("viewTimer"),
     viewSteps = document.getElementById("viewSteps"),
+    viewPlan  = document.getElementById("viewPlan"),
     viewDone  = document.getElementById("viewDone"),
     tabTimer  = document.getElementById("tabTimer"),
+    tabPlan   = document.getElementById("tabPlan"),
     tabSteps  = document.getElementById("tabSteps");
 
 function showView(which){
   viewTimer.classList.toggle("hidden", which !== "timer");
   viewDone.classList.toggle("hidden", which !== "done");
   viewSteps.classList.toggle("hidden", which !== "steps");
-  tabTimer.setAttribute("aria-selected", which === "steps" ? "false" : "true");
+  viewPlan.classList.toggle("hidden", which !== "plan");
+  tabTimer.setAttribute("aria-selected", (which === "timer" || which === "done") ? "true" : "false");
+  tabPlan.setAttribute("aria-selected", which === "plan" ? "true" : "false");
   tabSteps.setAttribute("aria-selected", which === "steps" ? "true" : "false");
+  if(which === "plan"){ buildBoard(); renderPlan(); }
   window.scrollTo(0, 0);
 }
 tabTimer.addEventListener("click", function(){ showView(T.mode === "done" ? "done" : "timer"); });
+tabPlan.addEventListener("click", function(){ showView("plan"); });
 tabSteps.addEventListener("click", function(){ showView("steps"); });
 
 /* ================= steps editor ================= */
@@ -833,8 +1049,11 @@ function buildStepsEditor(){
 }
 
 function onRoutineEdited(){
+  tonightIds = null;
   saveState();
   if(T.mode !== "idle" && T.mode !== "done"){ stopToIdle(); }
+  buildBoard();
+  renderPlan();
   render();
 }
 
@@ -872,8 +1091,16 @@ document.getElementById("btnAgain").addEventListener("click", function(){
 document.getElementById("btnDoneSteps").addEventListener("click", function(){ showView("steps"); });
 document.getElementById("btnReset").addEventListener("click", function(){
   steps = cloneDefaults();
+  groupTier = defaultGroupTier();
+  groupOrder = DEFAULT_GROUP_ORDER.slice();
+  skipGroups = [];
+  tonightIds = null;
+  planBudgetSec = null;
+  for(var k in GROUP_META){ if(!DEFAULT_GROUP_TIER.hasOwnProperty(k)) delete GROUP_META[k]; }
   saveState();
   buildStepsEditor();
+  buildBoard();
+  renderPlan();
   stopToIdle();
   render();
 });
@@ -911,8 +1138,294 @@ document.addEventListener("keydown", function(e){
   }
 });
 
+
+/* ================= tiers board + planner ================= */
+function customMeta(){
+  var o = {};
+  for(var k in GROUP_META){
+    if(!DEFAULT_GROUP_TIER.hasOwnProperty(k) && GROUP_META[k] && GROUP_META[k].name) o[k] = GROUP_META[k].name;
+  }
+  return o;
+}
+
+var tierBoard = document.getElementById("tierBoard");
+
+function moveGroupTo(gid, tier, idx){
+  groupTier[gid] = tier;
+  var rest = groupOrder.filter(function(g){ return g !== gid; });
+  var byTier = {};
+  TIERS.forEach(function(t){ byTier[t] = rest.filter(function(g){ return (groupTier[g] || "C") === t; }); });
+  idx = Math.max(0, Math.min(idx, byTier[tier].length));
+  byTier[tier].splice(idx, 0, gid);
+  groupOrder = [];
+  TIERS.forEach(function(t){ groupOrder = groupOrder.concat(byTier[t]); });
+  saveState();
+  buildBoard();
+  renderPlan();
+}
+
+function nudgeGroup(gid, dir){
+  var tier = groupTier[gid] || "C";
+  var inTier = groupOrder.filter(function(g){ return (groupTier[g] || "C") === tier; });
+  var i = inTier.indexOf(gid), j = i + dir;
+  if(i < 0 || j < 0 || j >= inTier.length) return;
+  var a = groupOrder.indexOf(inTier[i]), b = groupOrder.indexOf(inTier[j]);
+  groupOrder[a] = inTier[j]; groupOrder[b] = inTier[i];
+  saveState();
+  buildBoard();
+  renderPlan();
+}
+
+function attachDrag(handle, card, gid){
+  handle.addEventListener("pointerdown", function(e){
+    e.preventDefault();
+    var startY = e.clientY, lastY = e.clientY, hoverRow = null;
+    card.classList.add("dragging");
+    card.style.pointerEvents = "none";
+    try{ handle.setPointerCapture(e.pointerId); }catch(err){}
+    function move(ev){
+      lastY = ev.clientY;
+      card.style.transform = "translateY(" + (ev.clientY - startY) + "px)";
+      var t = document.elementFromPoint(ev.clientX, ev.clientY);
+      var row = (t && t.closest) ? t.closest(".tier-row") : null;
+      if(hoverRow && hoverRow !== row) hoverRow.classList.remove("drop-hint");
+      hoverRow = row;
+      if(hoverRow) hoverRow.classList.add("drop-hint");
+    }
+    function up(){
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointercancel", up);
+      card.classList.remove("dragging");
+      card.style.transform = "";
+      card.style.pointerEvents = "";
+      if(hoverRow){
+        hoverRow.classList.remove("drop-hint");
+        var targetTier = hoverRow.getAttribute("data-tier");
+        var cards = hoverRow.querySelectorAll(".gcard");
+        var idx = 0;
+        for(var i = 0; i < cards.length; i++){
+          if(cards[i] === card) continue;
+          var r = cards[i].getBoundingClientRect();
+          if(lastY > r.top + r.height / 2) idx++;
+        }
+        moveGroupTo(gid, targetTier, idx);
+      }
+    }
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", up);
+  });
+}
+
+function groupCard(g){
+  var card = document.createElement("div");
+  card.className = "gcard" + (isSkipped(g.id) ? " skipped" : "");
+  card.setAttribute("data-gid", g.id);
+
+  var nm = document.createElement("div");
+  nm.className = "gcard-name"; nm.textContent = g.name;
+  var meta = document.createElement("div");
+  meta.className = "gcard-meta";
+  meta.textContent = g.steps.length + (g.steps.length === 1 ? " step · " : " steps · ") + fmt(groupAloneSec(g)) + " · " + g.phase;
+  card.appendChild(nm); card.appendChild(meta);
+
+  var ctl = document.createElement("div");
+  ctl.className = "gcard-ctl";
+
+  var handle = document.createElement("button");
+  handle.className = "drag-handle"; handle.textContent = "⠿";
+  handle.setAttribute("aria-label", "Drag " + g.name + " to another tier");
+  ctl.appendChild(handle);
+
+  var sel = document.createElement("select");
+  sel.setAttribute("aria-label", "Tier for " + g.name);
+  TIERS.forEach(function(t){
+    var o = document.createElement("option");
+    o.value = t; o.textContent = "Tier " + t;
+    if(t === g.tier) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.addEventListener("change", function(){
+    var count = groupsOf().filter(function(x){ return x.tier === sel.value; }).length;
+    moveGroupTo(g.id, sel.value, count);
+  });
+  ctl.appendChild(sel);
+
+  var up = document.createElement("button");
+  up.textContent = "▲"; up.setAttribute("aria-label", "Move " + g.name + " up in its tier");
+  up.addEventListener("click", function(){ nudgeGroup(g.id, -1); });
+  var dn = document.createElement("button");
+  dn.textContent = "▼"; dn.setAttribute("aria-label", "Move " + g.name + " down in its tier");
+  dn.addEventListener("click", function(){ nudgeGroup(g.id, 1); });
+  ctl.appendChild(up); ctl.appendChild(dn);
+
+  var skip = document.createElement("button");
+  skip.className = "skip-btn";
+  skip.setAttribute("aria-pressed", isSkipped(g.id) ? "true" : "false");
+  skip.textContent = isSkipped(g.id) ? "Skipped — include" : "Skip tonight";
+  skip.addEventListener("click", function(){
+    var i = skipGroups.indexOf(g.id);
+    if(i >= 0) skipGroups.splice(i, 1); else skipGroups.push(g.id);
+    saveState();
+    buildBoard();
+    renderPlan();
+  });
+  ctl.appendChild(skip);
+
+  card.appendChild(ctl);
+  attachDrag(handle, card, g.id);
+  return card;
+}
+
+function buildBoard(){
+  if(!tierBoard) return;
+  tierBoard.innerHTML = "";
+  var all = groupsOf();
+  TIERS.forEach(function(tier){
+    var row = document.createElement("div");
+    row.className = "tier-row"; row.setAttribute("data-tier", tier);
+    var head = document.createElement("div");
+    head.className = "tier-head";
+    var badge = document.createElement("span");
+    badge.className = "tier-badge t" + tier; badge.textContent = tier;
+    var sub = document.createElement("span");
+    sub.className = "tier-sub"; sub.textContent = TIER_SUB[tier];
+    head.appendChild(badge); head.appendChild(sub);
+    row.appendChild(head);
+    var gs = all.filter(function(g){ return g.tier === tier; });
+    gs.sort(function(a,b){ return groupOrder.indexOf(a.id) - groupOrder.indexOf(b.id); });
+    if(!gs.length){
+      var e = document.createElement("div");
+      e.className = "tier-empty";
+      e.textContent = "Nothing here — drag a card in or use its tier menu.";
+      row.appendChild(e);
+    }
+    gs.forEach(function(g){ row.appendChild(groupCard(g)); });
+    tierBoard.appendChild(row);
+  });
+}
+
+/* ---------- planner ---------- */
+var budgetRange = document.getElementById("budgetRange"),
+    budgetLabel = document.getElementById("budgetLabel"),
+    budgetMeta  = document.getElementById("budgetMeta"),
+    planOut     = document.getElementById("planOut"),
+    planNote    = document.getElementById("planNote"),
+    btnStartPlan = document.getElementById("btnStartPlan");
+var currentPlan = null;
+
+function renderPlan(){
+  if(!budgetRange) return;
+  var maxSec = Math.max(300, planMaxSec());
+  budgetRange.max = String(maxSec);
+  var val = (typeof planBudgetSec === "number") ? planBudgetSec : maxSec;
+  val = Math.max(300, Math.min(maxSec, Math.round(val / 30) * 30));
+  budgetRange.value = String(val);
+  planBudgetSec = val;
+  budgetLabel.textContent = fmt(val);
+  var p = computePlan(val);
+  currentPlan = p;
+  budgetMeta.textContent = p.steps.length + " steps · " + p.groups.length + " exercises · " +
+    fmt(p.totalSec) + " planned · " + fmt(Math.max(0, val - p.totalSec)) + " to spare";
+  planOut.innerHTML = "";
+  if(p.steps.length){
+    var ul = document.createElement("ol");
+    ul.className = "plan-list";
+    p.steps.forEach(function(s, i){
+      var li = document.createElement("li");
+      var l = document.createElement("span"); l.textContent = (i + 1) + ". " + s.name;
+      var r = document.createElement("span"); r.className = "t"; r.textContent = fmt(s.seconds);
+      li.appendChild(l); li.appendChild(r);
+      ul.appendChild(li);
+    });
+    planOut.appendChild(ul);
+  }else{
+    var none = document.createElement("p");
+    none.textContent = "No exercises fit — raise the budget or un-skip some exercises.";
+    planOut.appendChild(none);
+  }
+  var parts = [];
+  if(p.cut.length) parts.push("Cut for time: " + p.cut.map(function(g){ return g.name + " (" + g.tier + ")"; }).join(", "));
+  if(p.skipped.length) parts.push("Skipped tonight: " + p.skipped.map(function(g){ return g.name; }).join(", "));
+  if(parts.length){
+    var d = document.createElement("p");
+    d.className = "cut-line";
+    d.textContent = parts.join(" · ");
+    planOut.appendChild(d);
+  }
+  planNote.textContent = tonightIds ?
+    "Tonight's picks are loaded — press Start in the Timer tab. “Full routine instead” clears them." : "";
+  btnStartPlan.disabled = !p.steps.length;
+}
+
+budgetRange.addEventListener("input", function(){
+  planBudgetSec = Number(budgetRange.value);
+  saveState();
+  renderPlan();
+});
+
+btnStartPlan.addEventListener("click", function(){
+  if(!currentPlan || !currentPlan.steps.length) return;
+  tonightIds = currentPlan.steps.map(function(s){ return s.id; });
+  saveState();
+  if(T.mode !== "idle" && T.mode !== "done"){ stopToIdle(); }
+  showView("timer");
+  render();
+});
+
+document.getElementById("btnClearPlan").addEventListener("click", function(){
+  tonightIds = null;
+  saveState();
+  renderPlan();
+  render();
+});
+
+/* ---------- add an exercise ---------- */
+document.getElementById("btnAddExercise").addEventListener("click", function(){
+  var nameEl = document.getElementById("newName");
+  var note = document.getElementById("addNote");
+  var name = nameEl.value.trim();
+  if(!name){ note.textContent = "Give the exercise a name first."; return; }
+  var secs = clampSec(document.getElementById("newSeconds").value, 30);
+  var sides = document.getElementById("newSides").value;
+  var phase = document.getElementById("newPhase").value;
+  var tier = document.getElementById("newTier").value;
+  var gid = "u" + Date.now().toString(36);
+  GROUP_META[gid] = {name:name};
+  groupTier[gid] = tier;
+  var rank = TIERS.indexOf(tier);
+  var insertAt = groupOrder.length;
+  for(var i = 0; i < groupOrder.length; i++){
+    if(TIERS.indexOf(groupTier[groupOrder[i]] || "C") > rank){ insertAt = i; break; }
+  }
+  var fresh = [];
+  if(sides === "pair"){
+    fresh.push({id:gid + "-l", group:gid, phase:phase, name:name + " — left", seconds:secs, cue:"Custom exercise.", enabled:true});
+    fresh.push({id:gid + "-r", group:gid, phase:phase, name:name + " — right", seconds:secs, cue:"Same as left.", enabled:true});
+  }else{
+    fresh.push({id:gid + "-1", group:gid, phase:phase, name:name, seconds:secs, cue:"Custom exercise.", enabled:true});
+  }
+  var at = steps.length;
+  for(var j = steps.length - 1; j >= 0; j--){
+    if(steps[j].phase === phase){ at = j + 1; break; }
+  }
+  steps.splice.apply(steps, [at, 0].concat(fresh));
+  groupOrder.splice(insertAt, 0, gid);
+  tonightIds = null;
+  saveState();
+  buildStepsEditor();
+  buildBoard();
+  renderPlan();
+  render();
+  nameEl.value = "";
+  note.textContent = "Added “" + name + "” to Tier " + tier + " — drag it anywhere on the board.";
+});
+
 /* ================= init ================= */
 buildStepsEditor();
+buildBoard();
+renderPlan();
 render();
 })();
 </script>
