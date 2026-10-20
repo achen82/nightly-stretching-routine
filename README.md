@@ -1,7 +1,7 @@
 # Nightly Stretching Routine
 
-A mobile-first stretching timer web app: a 32-step nightly routine
-(19:20 total — 16:45 of stretching plus 31 × 5-second transitions), with a
+A mobile-first stretching timer web app: a 30-step nightly routine
+(19:10 total — 16:45 of stretching plus 29 × 5-second transitions), with a
 large countdown, audible cues, and editable steps. Includes a Plan & Tiers
 tab: rank exercises in tiers A (most important) to F, drag the time slider
 (5:00 up to the full routine, 30-second steps) and the app builds tonight's

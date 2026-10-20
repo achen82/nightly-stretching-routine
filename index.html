@@ -381,8 +381,7 @@ var DEFAULT_STEPS = [
   {id:"s2",  group:"g-calf", phase:"Roll / massage", name:"Calf rolling — right", seconds:30, cue:"Same as left; do not press directly on the Achilles tendon."},
   {id:"s33", group:"g-backcalf", phase:"Roll / massage", name:"Back of calf rollout — left", seconds:30, cue:"Second, slower pass over the back of the calf, above the Achilles to below the knee; avoid the knee crease."},
   {id:"s34", group:"g-backcalf", phase:"Roll / massage", name:"Back of calf rollout — right", seconds:30, cue:"Same as left; do not press directly on the Achilles tendon."},
-  {id:"s3",  group:"g-quad", phase:"Roll / massage", name:"Quad rolling — left", seconds:30, cue:"Use Roll Recovery R8 or foam roller. Stay on the quad muscle, not the kneecap or tendons."},
-  {id:"s4",  group:"g-quad", phase:"Roll / massage", name:"Quad rolling — right", seconds:30, cue:"Same as left."},
+  {id:"s3",  group:"g-quad", phase:"Roll / massage", name:"Quad rolling", seconds:60, cue:"Use Roll Recovery R8 or foam roller. Roll both quads, staying on the muscle — not the kneecap or tendons."},
   {id:"s31", group:"g-itband", phase:"Roll / massage", name:"IT band rollout — left", seconds:30, cue:"Foam roll the outer thigh from hip toward knee in slow passes; keep pressure tolerable and stop above the knee."},
   {id:"s32", group:"g-itband", phase:"Roll / massage", name:"IT band rollout — right", seconds:30, cue:"Same as left."},
   {id:"s5",  group:"g-glute", phase:"Roll / massage", name:"Tennis ball — upper-outer left glute", seconds:30, cue:"Target the fleshy upper-outer glute near—but not directly on—the hip bone."},
@@ -395,8 +394,7 @@ var DEFAULT_STEPS = [
   {id:"s12", group:"g-pretzel", phase:"Floor stretches / mobility", name:"Pretzel stretch — right", seconds:30, cue:"Same as left."},
   {id:"s13", group:"g-fig4", phase:"Floor stretches / mobility", name:"Figure-four stretch — left", seconds:30, cue:"Gentle deep-glute/hip stretch; don’t force the knee."},
   {id:"s14", group:"g-fig4", phase:"Floor stretches / mobility", name:"Figure-four stretch — right", seconds:30, cue:"Same as left."},
-  {id:"s15", group:"g-hamstring", phase:"Floor stretches / mobility", name:"Hamstring stretch — left", seconds:30, cue:"Relaxed position with a small knee bend if needed; no bouncing."},
-  {id:"s16", group:"g-hamstring", phase:"Floor stretches / mobility", name:"Hamstring stretch — right", seconds:30, cue:"Same as left."},
+  {id:"s15", group:"g-hamstring", phase:"Floor stretches / mobility", name:"Hamstring stretch", seconds:60, cue:"Relaxed position with a small knee bend if needed; cover both legs evenly, no bouncing."},
   {id:"s17", group:"g-butterfly", phase:"Floor stretches / mobility", name:"Butterfly stretch", seconds:45, cue:"Feet together, knees gently toward floor; focus on inner thighs, without pressing on knees."},
   {id:"s29", group:"g-neckknot", phase:"Floor stretches / mobility", name:"Back of neck knot — left", seconds:30, cue:"Lying on your back, tennis ball under the base of the skull on the left side; small gentle nods, comfortable pressure only."},
   {id:"s30", group:"g-neckknot", phase:"Floor stretches / mobility", name:"Back of neck knot — right", seconds:30, cue:"Same as left."},
@@ -436,7 +434,8 @@ var DEFAULT_GROUP_ORDER = ["g-glute","g-couch","g-fig4",
   "g-bentcalf","g-chest","g-neck","g-chin"];
 
 /* ================= persistence (this device only) ================= */
-var LS_KEY = "nightly-stretching-v2";
+var LS_KEY = "nightly-stretching-v3";
+var LS_KEY_V2 = "nightly-stretching-v2";
 var LS_KEY_V1 = "nightly-stretching-v1";
 var storeOK = true;
 function loadRaw(key){
@@ -468,6 +467,39 @@ function clampSec(v, dflt){
 }
 
 var steps, prefs, groupTier, groupOrder, skipGroups, tonightIds, planBudgetSec;
+
+/* Rebuild the step list from current defaults, overlaying saved per-step
+   seconds/enabled and keeping user-added steps — so routine changes in an
+   update take effect even when an older save exists on the device. */
+function overlaySavedSteps(savedSteps){
+  var byId = {};
+  savedSteps.forEach(function(s){ if(s && s.id) byId[s.id] = s; });
+  var defaultIds = {};
+  DEFAULT_STEPS.forEach(function(d){ defaultIds[d.id] = true; });
+  var out = DEFAULT_STEPS.map(function(d){
+    var s = byId[d.id];
+    var c = {id:d.id, group:d.group, phase:d.phase, name:d.name, seconds:d.seconds, cue:d.cue, enabled:true};
+    if(s){
+      c.seconds = clampSec(s.seconds, d.seconds);
+      /* steps merged from a pair into one (quad s3, hamstring s15): a saved
+         30 was the old per-side default, not a deliberate edit — use 60. */
+      if((d.id === "s3" || d.id === "s15") && Number(s.seconds) === 30) c.seconds = d.seconds;
+      c.enabled = s.enabled !== false;
+    }
+    return c;
+  });
+  savedSteps.forEach(function(s){
+    if(!s || !s.id || defaultIds[s.id]) return;
+    if(/^s\d+$/.test(s.id)) return; /* retired default step from an older routine version */
+    var c = { id:String(s.id), group:String(s.group || ("g-" + s.id)),
+      phase:String(s.phase || "Floor stretches / mobility"), name:String(s.name || "Exercise"),
+      seconds:clampSec(s.seconds, 30), cue:String(s.cue || ""), enabled: s.enabled !== false };
+    var at = out.length;
+    for(var j = out.length - 1; j >= 0; j--){ if(out[j].phase === c.phase){ at = j + 1; break; } }
+    out.splice(at, 0, c);
+  });
+  steps = out;
+}
 (function initState(){
   steps = cloneDefaults();
   prefs = { sound:true, voice:true, countBeeps:true };
@@ -477,38 +509,36 @@ var steps, prefs, groupTier, groupOrder, skipGroups, tonightIds, planBudgetSec;
   tonightIds = null;
   planBudgetSec = null;
 
-  var v2 = loadRaw(LS_KEY);
-  if(v2 && Array.isArray(v2.steps) && v2.steps.length){
-    steps = v2.steps.filter(function(s){ return s && s.id && s.name; }).map(function(s){
-      return { id:String(s.id), group:String(s.group || ("g-" + s.id)), phase:String(s.phase || ""),
-        name:String(s.name), seconds:clampSec(s.seconds, 30), cue:String(s.cue || ""), enabled: s.enabled !== false };
-    });
-    if(v2.prefs){
-      if(typeof v2.prefs.sound === "boolean") prefs.sound = v2.prefs.sound;
-      if(typeof v2.prefs.voice === "boolean") prefs.voice = v2.prefs.voice;
-      if(typeof v2.prefs.countBeeps === "boolean") prefs.countBeeps = v2.prefs.countBeeps;
+  function restoreFrom(sv){
+    if(!sv) return;
+    if(Array.isArray(sv.steps) && sv.steps.length) overlaySavedSteps(sv.steps);
+    if(sv.prefs){
+      if(typeof sv.prefs.sound === "boolean") prefs.sound = sv.prefs.sound;
+      if(typeof sv.prefs.voice === "boolean") prefs.voice = sv.prefs.voice;
+      if(typeof sv.prefs.countBeeps === "boolean") prefs.countBeeps = sv.prefs.countBeeps;
     }
-    if(v2.groupTier){ for(var k in v2.groupTier){ if(TIERS.indexOf(v2.groupTier[k]) >= 0) groupTier[k] = v2.groupTier[k]; } }
-    if(Array.isArray(v2.groupOrder) && v2.groupOrder.length) groupOrder = v2.groupOrder.slice();
-    if(Array.isArray(v2.skipGroups)) skipGroups = v2.skipGroups.slice();
-    if(Array.isArray(v2.tonightIds)) tonightIds = v2.tonightIds.slice();
-    if(typeof v2.planBudgetSec === "number") planBudgetSec = v2.planBudgetSec;
-    if(v2.groupMeta){ for(var gm in v2.groupMeta){ GROUP_META[gm] = {name:String(v2.groupMeta[gm])}; } }
-  }else{
-    var v1 = loadRaw(LS_KEY_V1);
-    if(v1 && Array.isArray(v1.steps)){
-      var byId = {};
-      v1.steps.forEach(function(s){ if(s && s.id) byId[s.id] = s; });
-      steps = steps.map(function(d){
-        var s = byId[d.id];
-        if(!s) return d;
-        return { id:d.id, group:d.group, phase:d.phase, name:d.name, cue:d.cue,
-          seconds: clampSec(s.seconds, d.seconds), enabled: s.enabled !== false };
-      });
-      if(v1.prefs){
-        if(typeof v1.prefs.sound === "boolean") prefs.sound = v1.prefs.sound;
-        if(typeof v1.prefs.voice === "boolean") prefs.voice = v1.prefs.voice;
-        if(typeof v1.prefs.countBeeps === "boolean") prefs.countBeeps = v1.prefs.countBeeps;
+    if(sv.groupTier){ for(var k in sv.groupTier){ if(TIERS.indexOf(sv.groupTier[k]) >= 0) groupTier[k] = sv.groupTier[k]; } }
+    if(Array.isArray(sv.groupOrder) && sv.groupOrder.length) groupOrder = sv.groupOrder.slice();
+    if(Array.isArray(sv.skipGroups)) skipGroups = sv.skipGroups.slice();
+    if(Array.isArray(sv.tonightIds)) tonightIds = sv.tonightIds.slice();
+    if(typeof sv.planBudgetSec === "number") planBudgetSec = sv.planBudgetSec;
+    if(sv.groupMeta){ for(var gm in sv.groupMeta){ GROUP_META[gm] = {name:String(sv.groupMeta[gm])}; } }
+  }
+
+  var v3 = loadRaw(LS_KEY);
+  if(v3){ restoreFrom(v3); }
+  else{
+    var v2 = loadRaw(LS_KEY_V2);
+    if(v2){ restoreFrom(v2); }
+    else{
+      var v1 = loadRaw(LS_KEY_V1);
+      if(v1){
+        if(Array.isArray(v1.steps)) overlaySavedSteps(v1.steps);
+        if(v1.prefs){
+          if(typeof v1.prefs.sound === "boolean") prefs.sound = v1.prefs.sound;
+          if(typeof v1.prefs.voice === "boolean") prefs.voice = v1.prefs.voice;
+          if(typeof v1.prefs.countBeeps === "boolean") prefs.countBeeps = v1.prefs.countBeeps;
+        }
       }
     }
   }
