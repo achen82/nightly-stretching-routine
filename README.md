@@ -29,6 +29,23 @@ git pull
 docker compose up -d --build
 ```
 
+Or update automatically whenever the GitHub repo changes — one-time setup on
+the Pi (after cloning, and with your user able to run docker without sudo):
+
+```bash
+crontab -e
+```
+
+Add this line (checks every 5 minutes; rebuilds only when a new commit
+lands, and logs to `~/stretching-update.log`):
+
+```
+*/5 * * * * $HOME/nightly-stretching-routine/auto-update.sh >> $HOME/stretching-update.log 2>&1
+```
+
+If docker needs sudo for your user, run this once and log out/in:
+`sudo usermod -aG docker $USER`
+
 Then open it from any device on your network:
 
 ```
