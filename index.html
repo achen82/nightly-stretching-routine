@@ -231,6 +231,14 @@
     font-size:14px; font-weight:800; line-height:1; padding:0;
   }
   .del-step-btn[data-armed="1"]{ background:var(--danger); color:#fff; width:auto; padding:0 8px; font-size:12px; }
+  .rename-input{
+    width:100%; font:inherit; font-weight:700; font-size:15px; padding:8px;
+    border:1.5px solid var(--accent); border-radius:9px; background:var(--surface); color:var(--ink);
+  }
+  .step-name-input{
+    width:100%; font:inherit; font-weight:700; font-size:15px; color:var(--ink);
+    border:none; border-bottom:1.5px dashed var(--line); background:transparent; padding:2px 0; border-radius:0;
+  }
   @media (max-width:380px){ .countdown{ font-size:88px; } .ex-name{ font-size:24px; } }
 </style>
 </head>
@@ -427,6 +435,8 @@ var GROUP_META = {
   "g-bentcalf":{name:"Bent-knee calf stretch"}, "g-chest":{name:"Doorway chest stretch"},
   "g-neck":{name:"Upper-trap neck stretch"}, "g-chin":{name:"Chin tucks"}
 };
+var DEFAULT_GROUP_NAMES = {};
+for(var gk in GROUP_META) DEFAULT_GROUP_NAMES[gk] = GROUP_META[gk].name;
 var TIERS = ["A","B","C","D","E","F"];
 var TIER_SUB = {A:"Essential", B:"High", C:"Medium", D:"Low", E:"Optional", F:"First to cut"};
 var DEFAULT_GROUP_TIER = {
@@ -489,6 +499,7 @@ function overlaySavedSteps(savedSteps){
     var s = byId[d.id];
     var c = {id:d.id, group:d.group, phase:d.phase, name:d.name, seconds:d.seconds, cue:d.cue, enabled:true};
     if(s){
+      if(s.name && !((d.id === "s3" || d.id === "s15") && /— (left|right)$/.test(String(s.name)))) c.name = String(s.name);
       c.seconds = clampSec(s.seconds, d.seconds);
       /* steps merged from a pair into one (quad s3, hamstring s15): a saved
          30 was the old per-side default, not a deliberate edit — use 60. */
@@ -1038,8 +1049,16 @@ function buildStepsEditor(){
 
     var main = document.createElement("div");
     main.className = "step-main";
-    var nm = document.createElement("div");
-    nm.className = "step-name"; nm.textContent = step.name;
+    var nm = document.createElement("input");
+    nm.className = "step-name-input";
+    nm.type = "text";
+    nm.value = step.name;
+    nm.setAttribute("aria-label", "Step name (editable)");
+    nm.addEventListener("change", function(){
+      var v = nm.value.trim();
+      if(!v){ nm.value = step.name; return; }
+      if(v !== step.name){ step.name = v; onRoutineEdited(); }
+    });
     var meta = document.createElement("div");
     meta.className = "step-meta"; meta.textContent = fmt(step.seconds) + " · " + step.cue;
     main.appendChild(nm); main.appendChild(meta);
@@ -1158,6 +1177,7 @@ document.getElementById("btnReset").addEventListener("click", function(){
   planBudgetSec = null;
   deletedGroups = [];
   deletedStepIds = [];
+  for(var dg in DEFAULT_GROUP_NAMES){ GROUP_META[dg] = {name: DEFAULT_GROUP_NAMES[dg]}; }
   for(var k in GROUP_META){ if(!DEFAULT_GROUP_TIER.hasOwnProperty(k)) delete GROUP_META[k]; }
   saveState();
   buildStepsEditor();
@@ -1205,9 +1225,30 @@ document.addEventListener("keydown", function(e){
 function customMeta(){
   var o = {};
   for(var k in GROUP_META){
-    if(!DEFAULT_GROUP_TIER.hasOwnProperty(k) && GROUP_META[k] && GROUP_META[k].name) o[k] = GROUP_META[k].name;
+    if(GROUP_META[k] && GROUP_META[k].name) o[k] = GROUP_META[k].name;
   }
   return o;
+}
+
+function renameGroup(gid, newName){
+  newName = String(newName || "").trim();
+  if(!newName) return;
+  var oldName = GROUP_META[gid] ? GROUP_META[gid].name : null;
+  if(!GROUP_META[gid]) GROUP_META[gid] = {};
+  GROUP_META[gid].name = newName;
+  if(oldName && oldName !== newName){
+    steps.forEach(function(s){
+      if(s.group !== gid) return;
+      if(s.name === oldName) s.name = newName;
+      else if(s.name === oldName + " — left") s.name = newName + " — left";
+      else if(s.name === oldName + " — right") s.name = newName + " — right";
+    });
+  }
+  saveState();
+  buildStepsEditor();
+  buildBoard();
+  renderPlan();
+  render();
 }
 
 function deleteGroup(gid){
@@ -1368,6 +1409,37 @@ function groupCard(g){
     renderPlan();
   });
   ctl.appendChild(skip);
+
+  var ren = document.createElement("button");
+  ren.textContent = "Rename";
+  ren.setAttribute("aria-label", "Rename " + g.name);
+  ren.addEventListener("click", function(){
+    var input = document.createElement("input");
+    input.type = "text";
+    input.className = "rename-input";
+    input.value = g.name;
+    input.setAttribute("aria-label", "New name for " + g.name);
+    nm.parentNode.replaceChild(input, nm);
+    ctl.classList.add("hidden");
+    var row = document.createElement("div");
+    row.className = "gcard-ctl";
+    var saveB = document.createElement("button");
+    saveB.textContent = "Save name";
+    saveB.addEventListener("click", function(){ renameGroup(g.id, input.value); });
+    var cancelB = document.createElement("button");
+    cancelB.textContent = "Cancel";
+    cancelB.addEventListener("click", function(){ buildBoard(); });
+    input.addEventListener("keydown", function(e){
+      if(e.key === "Enter") renameGroup(g.id, input.value);
+      if(e.key === "Escape") buildBoard();
+    });
+    row.appendChild(saveB);
+    row.appendChild(cancelB);
+    card.appendChild(row);
+    input.focus();
+    input.select();
+  });
+  ctl.appendChild(ren);
 
   var del = document.createElement("button");
   del.className = "del-btn";
