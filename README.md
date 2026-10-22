@@ -6,8 +6,9 @@ large countdown, audible cues, and editable steps. Includes a Plan & Tiers
 tab: rank exercises in tiers A (most important) to F, drag the time slider
 (5:00 up to the full routine, 30-second steps) and the app builds tonight's
 routine from your top tiers; skip exercises for the night, and add your own
-exercises with custom durations (30 seconds by default). The whole app is
-one self-contained `index.html` file — no build step, no dependencies.
+exercises with custom durations (30 seconds by default). The app itself is
+one self-contained `index.html` file — no build step, no dependencies —
+plus a tiny companion service that stores your data (see below).
 
 ## Run it on a Raspberry Pi (Docker)
 
@@ -56,12 +57,35 @@ Find the Pi's IP with `hostname -I` on the Pi.
 
 To stop it: `docker compose down`.
 
+## Where your data lives
+
+Your routine, edits, and settings are stored in a **SQLite database on the
+Pi** (the `api` service in `docker-compose.yml`, data in the
+`stretching-state` Docker volume), not just in your phone's browser. Every
+change is stamped with a time and the newest version wins, so Safari, the
+home-screen app, and any other device on your network all converge on the
+same routine. Each browser also keeps a local copy as an offline fallback.
+
+The first time the updated app opens, it uploads the data from whichever
+browser opens it; if two browsers have different data, the one with the
+newer changes wins the next time the other opens. (So after updating, open
+the app once in the browser where you most recently edited your routine.)
+
+Two cautions:
+
+- `docker compose down -v` deletes the volume and wipes the database. The
+  app will re-seed it from a phone's local copy on the next open, but
+  plain `docker compose down` (no `-v`) is the safe way to stop.
+- Editing the database file by hand is unnecessary — everything is
+  editable in the app itself.
+
 ## Add it to your iPhone home screen
 
 1. Open `http://<your-pi-ip>:8080` in Safari.
 2. Tap **Share** → **Add to Home Screen** → **Add**.
 3. It launches full-screen like a native app. Your step edits and settings
-   are saved in the browser on that device.
+   sync through the database on the Pi, so the home-screen app and Safari
+   always show the same routine.
 
 Note: iOS limits web apps in the background — keep the app on screen with
 the display on while a routine runs so the timer and sounds stay reliable
@@ -75,4 +99,6 @@ The app is a single HTML file, e.g.:
 python3 -m http.server 8080
 ```
 
-then open `http://<your-pi-ip>:8080/index.html`.
+then open `http://<your-pi-ip>:8080/index.html`. Without the `api` service
+running behind `/api/`, the app simply falls back to saving in each
+browser locally, as it did before.

@@ -6,3 +6,19 @@ services:
     ports:
       - "8080:80"
     restart: unless-stopped
+    depends_on:
+      - api
+
+  # Stores the app state (routine, edits, preferences) in a SQLite
+  # database on the Pi, so every browser/app context sees the same data.
+  api:
+    image: python:3-alpine
+    container_name: nightly-stretching-api
+    command: python /app/server.py
+    volumes:
+      - ./api:/app:ro
+      - stretching-state:/data
+    restart: unless-stopped
+
+volumes:
+  stretching-state:

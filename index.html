@@ -458,18 +458,18 @@ var DEFAULT_STEPS = [
   {id:"s11", group:"g-pretzel", phase:"Floor stretches / mobility", name:"Pretzel stretch — left", seconds:30, cue:"Same as right."},
   {id:"s14", group:"g-fig4", phase:"Floor stretches / mobility", name:"Figure-four stretch — right", seconds:30, cue:"Gentle deep-glute/hip stretch; don’t force the knee."},
   {id:"s13", group:"g-fig4", phase:"Floor stretches / mobility", name:"Figure-four stretch — left", seconds:30, cue:"Same as right."},
-  {id:"s15", group:"g-hamstring", phase:"Floor stretches / mobility", name:"Hamstring stretch", seconds:60, cue:"Relaxed position with a small knee bend if needed; cover both legs evenly, no bouncing."},
   {id:"s17", group:"g-butterfly", phase:"Floor stretches / mobility", name:"Butterfly stretch", seconds:45, cue:"Feet together, knees gently toward floor; focus on inner thighs, without pressing on knees."},
   {id:"s30", group:"g-neckknot", phase:"Floor stretches / mobility", name:"Back of neck knot — right", seconds:30, cue:"Lying on your back, tennis ball under the base of the skull on the right side; small gentle nods, comfortable pressure only."},
   {id:"s29", group:"g-neckknot", phase:"Floor stretches / mobility", name:"Back of neck knot — left", seconds:30, cue:"Same as right."},
+  {id:"s27", group:"g-neck", phase:"Floor stretches / mobility", name:"Upper-trap neck stretch — right", seconds:30, cue:"Gentle ear-to-shoulder tilt; avoid pulling hard on head."},
+  {id:"s26", group:"g-neck", phase:"Floor stretches / mobility", name:"Upper-trap neck stretch — left", seconds:30, cue:"Same as right."},
+  {id:"s15", group:"g-hamstring", phase:"Wall / doorway finish", name:"Hamstring stretch", seconds:60, cue:"Relaxed position with a small knee bend if needed; cover both legs evenly, no bouncing."},
   {id:"s21", group:"g-straightcalf", phase:"Wall / doorway finish", name:"Straight-knee calf stretch — right", seconds:30, cue:"Emphasize gastrocnemius; heel down, knee straight but not locked."},
   {id:"s20", group:"g-straightcalf", phase:"Wall / doorway finish", name:"Straight-knee calf stretch — left", seconds:30, cue:"Same as right."},
   {id:"s23", group:"g-bentcalf", phase:"Wall / doorway finish", name:"Bent-knee calf stretch — right", seconds:30, cue:"Emphasize soleus; heel stays down as knee bends gently."},
   {id:"s22", group:"g-bentcalf", phase:"Wall / doorway finish", name:"Bent-knee calf stretch — left", seconds:30, cue:"Same as right."},
   {id:"s25", group:"g-chest", phase:"Wall / doorway finish", name:"Doorway chest stretch — right", seconds:30, cue:"Gentle chest/front-shoulder opening; avoid overstretching shoulder."},
   {id:"s24", group:"g-chest", phase:"Wall / doorway finish", name:"Doorway chest stretch — left", seconds:30, cue:"Same as right."},
-  {id:"s27", group:"g-neck", phase:"Wall / doorway finish", name:"Upper-trap neck stretch — right", seconds:30, cue:"Gentle ear-to-shoulder tilt; avoid pulling hard on head."},
-  {id:"s26", group:"g-neck", phase:"Wall / doorway finish", name:"Upper-trap neck stretch — left", seconds:30, cue:"Same as right."},
   {id:"s28", group:"g-chin", phase:"Wall / doorway finish", name:"Chin tucks", seconds:30, cue:"About five slow, controlled reps; move straight back rather than looking downward."}
 ];
 
@@ -483,6 +483,8 @@ var GROUP_META = {
   "g-bentcalf":{name:"Bent-knee calf stretch"}, "g-chest":{name:"Doorway chest stretch"},
   "g-neck":{name:"Upper-trap neck stretch"}, "g-chin":{name:"Chin tucks"}
 };
+/* pristine copy of the built-in group names, so re-applying a state can undo merges */
+var GROUP_META_PRISTINE = JSON.parse(JSON.stringify(GROUP_META));
 var DEFAULT_GROUP_NAMES = {};
 for(var gk in GROUP_META) DEFAULT_GROUP_NAMES[gk] = GROUP_META[gk].name;
 var TIERS = ["A","B","C","D","E","F"];
@@ -510,14 +512,72 @@ function loadRaw(key){
     return raw ? JSON.parse(raw) : null;
   }catch(e){ return null; }
 }
+/* The state also lives in a small database on the Pi (see api/server.py),
+   reached through /api/state on this same origin. Every save is stamped
+   with savedAt and the newest stamp wins across devices and browsers.
+   localStorage remains this context's cache and offline fallback. */
+var localSavedAt = 0;
+var editsSinceBoot = 0;
+function statePayload(){
+  return {
+    steps:steps, prefs:prefs, groupTier:groupTier, groupOrder:groupOrder,
+    skipGroups:skipGroups, tonightIds:tonightIds, planBudgetSec:planBudgetSec, groupMeta:customMeta(), deletedGroups:deletedGroups, deletedStepIds:deletedStepIds,
+    savedAt:localSavedAt
+  };
+}
 function saveState(){
-  if(!storeOK) return;
-  try{
-    localStorage.setItem(LS_KEY, JSON.stringify({
-      steps:steps, prefs:prefs, groupTier:groupTier, groupOrder:groupOrder,
-      skipGroups:skipGroups, tonightIds:tonightIds, planBudgetSec:planBudgetSec, groupMeta:customMeta(), deletedGroups:deletedGroups, deletedStepIds:deletedStepIds
-    }));
-  }catch(e){ storeOK = false; }
+  localSavedAt = Date.now();
+  editsSinceBoot++;
+  if(storeOK){
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(statePayload())); }
+    catch(e){ storeOK = false; }
+  }
+  pushServerState();
+}
+var pushTimer = null;
+function pushServerState(){
+  if(typeof fetch !== "function") return;
+  if(pushTimer) clearTimeout(pushTimer);
+  pushTimer = setTimeout(function(){
+    try{
+      fetch("/api/state", { method:"PUT", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ savedAt:localSavedAt, state:statePayload() }), keepalive:true
+      }).catch(function(){});
+    }catch(e){}
+  }, 400);
+}
+/* On load, reconcile this context's local copy with the Pi's database:
+   server newer -> apply the server's state here; local newer -> upload
+   this context's state; server empty -> seed it from this context;
+   API unreachable -> carry on with local storage only, exactly as before. */
+function syncWithServer(){
+  if(typeof fetch !== "function") return;
+  var ctl = ("AbortController" in window) ? new AbortController() : null;
+  var timer = ctl ? setTimeout(function(){ ctl.abort(); }, 3500) : null;
+  fetch("/api/state", ctl ? { signal:ctl.signal } : {})
+    .then(function(r){ return r.status === 200 ? r.json() : null; })
+    .then(function(rec){
+      if(timer) clearTimeout(timer);
+      if(editsSinceBoot > 0){ pushServerState(); return; } /* user already changed something: this context wins */
+      if(rec && rec.state && typeof rec.savedAt === "number"){
+        if(rec.savedAt > localSavedAt) applyServerState(rec);
+        else if(localSavedAt > rec.savedAt) pushServerState();
+      }else if(loadRaw(LS_KEY)){
+        pushServerState(); /* first run: seed the database from this device */
+      }
+    })
+    .catch(function(){ if(timer) clearTimeout(timer); });
+}
+function applyServerState(rec){
+  if(storeOK){
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(rec.state)); }catch(e){}
+  }
+  localSavedAt = rec.savedAt;
+  initState();
+  buildStepsEditor();
+  buildBoard();
+  renderPlan();
+  render();
 }
 
 function cloneDefaults(){
@@ -569,7 +629,7 @@ function overlaySavedSteps(savedSteps){
   });
   steps = out;
 }
-(function initState(){
+function initState(){
   steps = cloneDefaults();
   prefs = { sound:true, voice:true, countBeeps:true };
   groupTier = defaultGroupTier();
@@ -577,6 +637,10 @@ function overlaySavedSteps(savedSteps){
   skipGroups = [];
   tonightIds = null;
   planBudgetSec = null;
+  deletedGroups = [];
+  deletedStepIds = [];
+  for(var pk in GROUP_META) delete GROUP_META[pk];
+  for(var pk2 in GROUP_META_PRISTINE) GROUP_META[pk2] = { name:GROUP_META_PRISTINE[pk2].name };
 
   function restoreFrom(sv){
     if(!sv) return;
@@ -597,7 +661,7 @@ function overlaySavedSteps(savedSteps){
   }
 
   var v3 = loadRaw(LS_KEY);
-  if(v3){ restoreFrom(v3); }
+  if(v3){ localSavedAt = (typeof v3.savedAt === "number") ? v3.savedAt : 0; restoreFrom(v3); }
   else{
     var v2 = loadRaw(LS_KEY_V2);
     if(v2){ restoreFrom(v2); }
@@ -622,7 +686,8 @@ function overlaySavedSteps(savedSteps){
     if(groupOrder.indexOf(s.group) < 0) groupOrder.push(s.group);
   });
   groupOrder = groupOrder.filter(function(g){ return seen[g]; });
-})();
+}
+initState();
 
 /* ================= derived ================= */
 function enabledSteps(){ return steps.filter(function(s){ return s.enabled; }); }
@@ -1712,6 +1777,7 @@ buildStepsEditor();
 buildBoard();
 renderPlan();
 render();
+syncWithServer();
 })();
 </script>
 </body>
