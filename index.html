@@ -528,6 +528,7 @@ function statePayload(){
 function saveState(){
   localSavedAt = Date.now();
   editsSinceBoot++;
+  pushReconciled = false; /* this save's push gets its own reconcile pass */
   if(storeOK){
     try{ localStorage.setItem(LS_KEY, JSON.stringify(statePayload())); }
     catch(e){ storeOK = false; }
@@ -535,29 +536,74 @@ function saveState(){
   pushServerState();
 }
 var pushTimer = null;
+var syncFailed = false; /* last push/pull failed: the next foreground sync retries */
+var pushReconciled = false; /* a push reply already used its one reconcile pass */
+function sendServerState(){
+  var sentAt = localSavedAt;
+  try{
+    fetch("/api/state", { method:"PUT", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ savedAt:sentAt, state:statePayload() }), keepalive:true
+    }).then(function(r){
+      return r.status === 200 ? r.json() : null;
+    }).then(function(rec){
+      if(rec && typeof rec.savedAt === "number"){
+        syncFailed = false;
+        /* The server replies with the stamp it actually stored. A mismatch
+           means it kept a different record (ours was older, or our stamp
+           was clamped): reconcile once against the server instead of
+           assuming the push landed. */
+        if(rec.savedAt !== sentAt && !pushReconciled){
+          pushReconciled = true;
+          syncWithServer();
+        }
+      }else{
+        syncFailed = true;
+      }
+    }).catch(function(){ syncFailed = true; });
+  }catch(e){ syncFailed = true; }
+}
 function pushServerState(){
   if(typeof fetch !== "function") return;
   if(pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(function(){
-    try{
-      fetch("/api/state", { method:"PUT", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ savedAt:localSavedAt, state:statePayload() }), keepalive:true
-      }).catch(function(){});
-    }catch(e){}
+    pushTimer = null;
+    sendServerState();
   }, 400);
 }
-/* On load, reconcile this context's local copy with the Pi's database:
+/* If the page goes away while a push is still debounced, fire it now —
+   the timer would never run and other devices would never see the edit. */
+window.addEventListener("pagehide", function(){
+  if(pushTimer){ clearTimeout(pushTimer); pushTimer = null; sendServerState(); }
+});
+/* Reconcile this context's local copy with the Pi's database:
    server newer -> apply the server's state here; local newer -> upload
    this context's state; server empty -> seed it from this context;
-   API unreachable -> carry on with local storage only, exactly as before. */
+   API unreachable -> carry on with local storage only, exactly as before.
+   Runs on load and again whenever the app returns to the foreground
+   (visibilitychange / pageshow / focus below): a home-screen app can
+   stay alive for days without a reload, and a load-time-only sync left
+   it blind to edits made on other devices in the meantime. A 404 means
+   the database is legitimately empty; any other failure just sets
+   syncFailed and the next foreground sync retries. */
+var syncInFlight = false;
 function syncWithServer(){
   if(typeof fetch !== "function") return;
+  if(syncInFlight) return;
+  syncInFlight = true;
   var ctl = ("AbortController" in window) ? new AbortController() : null;
   var timer = ctl ? setTimeout(function(){ ctl.abort(); }, 3500) : null;
   fetch("/api/state", ctl ? { signal:ctl.signal } : {})
-    .then(function(r){ return r.status === 200 ? r.json() : null; })
+    .then(function(r){
+      if(r.status === 200) return r.json();
+      if(r.status === 404) return null; /* empty database, not an error */
+      syncFailed = true;
+      return undefined; /* server error: bail; next foreground sync retries */
+    })
     .then(function(rec){
+      syncInFlight = false;
       if(timer) clearTimeout(timer);
+      if(rec === undefined) return;
+      syncFailed = false;
       if(editsSinceBoot > 0){ pushServerState(); return; } /* user already changed something: this context wins */
       if(rec && rec.state && typeof rec.savedAt === "number"){
         if(rec.savedAt > localSavedAt) applyServerState(rec);
@@ -566,7 +612,11 @@ function syncWithServer(){
         pushServerState(); /* first run: seed the database from this device */
       }
     })
-    .catch(function(){ if(timer) clearTimeout(timer); });
+    .catch(function(){
+      syncInFlight = false;
+      syncFailed = true;
+      if(timer) clearTimeout(timer);
+    });
 }
 function applyServerState(rec){
   if(storeOK){
@@ -1324,8 +1374,13 @@ document.addEventListener("visibilitychange", function(){
   }else{
     /* back in foreground: stay paused (explicit), but restore wake lock offer on resume */
     render();
+    syncWithServer(); /* catch up with edits made on other devices while away */
   }
 });
+/* pageshow and focus cover the returns visibilitychange misses (bfcache
+   restores, window refocus); syncWithServer ignores overlapping calls. */
+window.addEventListener("pageshow", function(){ syncWithServer(); });
+window.addEventListener("focus", function(){ syncWithServer(); });
 window.addEventListener("pagehide", function(){
   if(T.running){ pauseTimer(true); }
 });

@@ -12,12 +12,16 @@ Endpoints:
   PUT  /api/state   <- {"savedAt": <ms epoch>, "state": {...}}
                        stores only if savedAt is not older than what's kept;
                        replies {"savedAt": <the stored timestamp>}
+                       A savedAt more than 5 minutes ahead of the server's
+                       own clock is clamped to the server's time, so one
+                       fast-clock client can't poison the store.
 
 Standard library only — no dependencies.
 """
 import json
 import os
 import sqlite3
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 DB_PATH = os.environ.get("STATE_DB", "/data/state.db")
@@ -48,6 +52,9 @@ def get_state():
 
 
 def put_state(saved_at, state):
+    now_ms = int(time.time() * 1000)
+    if saved_at > now_ms + 5 * 60 * 1000:
+        saved_at = now_ms
     conn = _connect()
     try:
         row = conn.execute(
