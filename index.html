@@ -191,6 +191,8 @@
   .plan-ctl button{ width:34px; height:34px; padding:0; border-radius:9px; border:1.5px solid var(--line); background:var(--surface); color:var(--ink); font-size:15px; }
   .plan-ctl button:disabled{ opacity:.35; }
   .plan-ctl button.danger{ color:var(--danger); border-color:var(--danger); }
+  .plan-ctl .drag-handle{ cursor:grab; touch-action:none; }
+  .plan-list li.dragging{ opacity:.85; box-shadow:var(--shadow); position:relative; z-index:5; }
   .removed-line{ font-size:14px; color:var(--ink-dim); margin-top:10px; }
   .removed-line button{ margin:2px 4px 2px 0; padding:6px 10px; border-radius:999px; border:1.5px solid var(--line); background:var(--surface); color:var(--ink); font-size:13.5px; }
   .cut-line{ font-size:13.5px; color:var(--ink-dim); margin-top:10px; }
@@ -370,7 +372,7 @@
 
     <div class="card">
       <h2>Tiers &mdash; A most important, F first to cut</h2>
-      <p>Drag a card by its handle (or use its tier menu and arrows) to re-rank. That order is the order you perform in, and it saves — so a full routine runs in your board order next time too. <strong>Skip tonight</strong> knocks an exercise out of the plan entirely, whatever the budget. A card&rsquo;s Delete button removes that exercise entirely (Reset in Steps &amp; Settings brings everything back). Tonight&rsquo;s list above has its own ▲ ▼ ✕ controls — those edits are for tonight only: removed exercises come back next time and your saved plan is untouched.</p>
+      <p>Drag a card by its handle (or use its tier menu and arrows) to re-rank. That order is the order you perform in, and it saves — so a full routine runs in your board order next time too. <strong>Skip tonight</strong> knocks an exercise out of the plan entirely, whatever the budget. A card&rsquo;s Delete button removes that exercise entirely (Reset in Steps &amp; Settings brings everything back). Tonight&rsquo;s list above has its own drag handle and ▲ ▼ ✕ controls — those edits are for tonight only: removed exercises come back next time and your saved plan is untouched.</p>
       <div id="tierBoard"></div>
     </div>
 
@@ -1798,6 +1800,61 @@ function removeTonightStep(id){
   saveState();
   renderPlan();
 }
+/* drag a tonight row by its handle to reorder tonight only — same
+   pointer-based pattern as the board, so it works with touch. Dropping
+   only rewrites tonightOrder; the saved plan is untouched. */
+function attachTonightDrag(handle, li, id){
+  handle.addEventListener("pointerdown", function(e){
+    e.preventDefault();
+    var shown = currentPlan ? currentPlan.steps.slice() : [];
+    var fromIdx = -1;
+    shown.forEach(function(s, k){ if(s.id === id) fromIdx = k; });
+    if(fromIdx < 0) return;
+    var startY = e.clientY, lastY = e.clientY, targetIdx = -1;
+    li.classList.add("dragging");
+    li.style.pointerEvents = "none";
+    try{ handle.setPointerCapture(e.pointerId); }catch(err){}
+    function move(ev){
+      lastY = ev.clientY;
+      li.style.transform = "translateY(" + (ev.clientY - startY) + "px)";
+      var t = document.elementFromPoint(ev.clientX, ev.clientY);
+      var row = (t && t.closest) ? t.closest(".plan-list li") : null;
+      if(row){
+        var rows = planOut.querySelectorAll(".plan-list li");
+        for(var k = 0; k < rows.length; k++){
+          if(rows[k] === row){
+            var r = rows[k].getBoundingClientRect();
+            targetIdx = (lastY > r.top + r.height / 2) ? k + 1 : k;
+            break;
+          }
+        }
+      }
+    }
+    function up(){
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointercancel", up);
+      li.classList.remove("dragging");
+      li.style.transform = "";
+      li.style.pointerEvents = "";
+      if(targetIdx >= 0){
+        var item = shown.splice(fromIdx, 1)[0];
+        var at = targetIdx;
+        if(at > fromIdx) at--;
+        if(at < 0) at = 0;
+        if(at > shown.length) at = shown.length;
+        shown.splice(at, 0, item);
+        tonightOrder = shown.map(function(s){ return s.id; });
+        tonightIds = null;
+        saveState();
+        renderPlan();
+      }
+    }
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", up);
+  });
+}
 function restoreTonightStep(id){
   tonightRemoved = tonightRemoved.filter(function(x){ return x !== id; });
   /* put it back where it sits in the base plan, not at the end */
@@ -1847,6 +1904,10 @@ function renderPlan(){
       var li = document.createElement("li");
       var l = document.createElement("span"); l.textContent = (i + 1) + ". " + s.name;
       var ctl = document.createElement("span"); ctl.className = "plan-ctl";
+      var handle = document.createElement("button");
+      handle.className = "drag-handle"; handle.textContent = "⠿";
+      handle.setAttribute("aria-label", "Drag " + s.name + " to reorder tonight");
+      ctl.appendChild(handle);
       var up = document.createElement("button");
       up.textContent = "▲"; up.setAttribute("aria-label", "Move " + s.name + " earlier tonight");
       up.disabled = (i === 0);
@@ -1861,6 +1922,7 @@ function renderPlan(){
       ctl.appendChild(up); ctl.appendChild(dn); ctl.appendChild(del);
       var r = document.createElement("span"); r.className = "t"; r.textContent = fmt(s.seconds);
       li.appendChild(l); li.appendChild(ctl); li.appendChild(r);
+      attachTonightDrag(handle, li, s.id);
       ul.appendChild(li);
     });
     planOut.appendChild(ul);
