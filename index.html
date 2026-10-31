@@ -184,9 +184,15 @@
   .budget-line span{ font-size:13.5px; color:var(--ink-dim); }
   input[type="range"]{ width:100%; accent-color:var(--accent); height:36px; }
   .plan-list{ margin:10px 0 0; padding:0; list-style:none; }
-  .plan-list li{ padding:6px 0; border-bottom:1px solid var(--line); font-size:14.5px; display:flex; justify-content:space-between; gap:10px; }
+  .plan-list li{ padding:6px 0; border-bottom:1px solid var(--line); font-size:14.5px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
   .plan-list li:last-child{ border-bottom:none; }
   .plan-list .t{ color:var(--ink-dim); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .plan-ctl{ display:flex; gap:6px; flex-shrink:0; }
+  .plan-ctl button{ width:34px; height:34px; padding:0; border-radius:9px; border:1.5px solid var(--line); background:var(--surface); color:var(--ink); font-size:15px; }
+  .plan-ctl button:disabled{ opacity:.35; }
+  .plan-ctl button.danger{ color:var(--danger); border-color:var(--danger); }
+  .removed-line{ font-size:14px; color:var(--ink-dim); margin-top:10px; }
+  .removed-line button{ margin:2px 4px 2px 0; padding:6px 10px; border-radius:999px; border:1.5px solid var(--line); background:var(--surface); color:var(--ink); font-size:13.5px; }
   .cut-line{ font-size:13.5px; color:var(--ink-dim); margin-top:10px; }
   .tier-row{ border:1.5px solid var(--line); border-radius:14px; padding:10px; margin-top:10px; background:var(--surface2); }
   .tier-row.drop-hint{ border-color:var(--accent); }
@@ -351,7 +357,7 @@
   <section id="viewPlan" class="hidden">
     <div class="card" style="margin-top:0">
       <h2>Tonight&rsquo;s time budget</h2>
-      <p>Set the time you have. The planner fills it from your top tiers down &mdash; counting each exercise&rsquo;s duration plus the 5-second transitions &mdash; and tonight&rsquo;s picks run in the normal routine order.</p>
+      <p>Set the time you have. The planner fills it from your top tiers down &mdash; counting each exercise&rsquo;s duration plus the 5-second transitions &mdash; and tonight&rsquo;s picks run in the board order below.</p>
       <input type="range" id="budgetRange" min="300" step="30" value="300" aria-label="Time budget in seconds">
       <div class="budget-line"><strong id="budgetLabel">5:00</strong><span id="budgetMeta"></span></div>
       <div id="planOut"></div>
@@ -364,7 +370,7 @@
 
     <div class="card">
       <h2>Tiers &mdash; A most important, F first to cut</h2>
-      <p>Drag a card by its handle (or use its tier menu and arrows) to re-rank. <strong>Skip tonight</strong> knocks an exercise out of the plan entirely, whatever the budget. Rankings save on this device. A card&rsquo;s Delete button removes that exercise entirely (Reset in Steps &amp; Settings brings everything back).</p>
+      <p>Drag a card by its handle (or use its tier menu and arrows) to re-rank. That order is the order you perform in, and it saves — so a full routine runs in your board order next time too. <strong>Skip tonight</strong> knocks an exercise out of the plan entirely, whatever the budget. A card&rsquo;s Delete button removes that exercise entirely (Reset in Steps &amp; Settings brings everything back). Tonight&rsquo;s list above has its own ▲ ▼ ✕ controls — those edits are for tonight only: removed exercises come back next time and your saved plan is untouched.</p>
       <div id="tierBoard"></div>
     </div>
 
@@ -521,7 +527,7 @@ var editsSinceBoot = 0;
 function statePayload(){
   return {
     steps:steps, prefs:prefs, groupTier:groupTier, groupOrder:groupOrder,
-    skipGroups:skipGroups, tonightIds:tonightIds, planBudgetSec:planBudgetSec, groupMeta:customMeta(), deletedGroups:deletedGroups, deletedStepIds:deletedStepIds,
+    skipGroups:skipGroups, tonightIds:tonightIds, planBudgetSec:planBudgetSec, tonightRemoved:tonightRemoved, tonightOrder:tonightOrder, groupMeta:customMeta(), deletedGroups:deletedGroups, deletedStepIds:deletedStepIds,
     savedAt:localSavedAt
   };
 }
@@ -642,7 +648,7 @@ function clampSec(v, dflt){
   return Math.max(5, Math.min(600, v));
 }
 
-var steps, prefs, groupTier, groupOrder, skipGroups, tonightIds, planBudgetSec;
+var steps, prefs, groupTier, groupOrder, skipGroups, tonightIds, planBudgetSec, tonightRemoved, tonightOrder;
 var deletedGroups = [], deletedStepIds = [];
 
 /* Rebuild the step list from current defaults, overlaying saved per-step
@@ -686,6 +692,8 @@ function initState(){
   groupOrder = DEFAULT_GROUP_ORDER.slice();
   skipGroups = [];
   tonightIds = null;
+  tonightRemoved = [];
+  tonightOrder = [];
   planBudgetSec = null;
   deletedGroups = [];
   deletedStepIds = [];
@@ -706,6 +714,8 @@ function initState(){
     if(Array.isArray(sv.groupOrder) && sv.groupOrder.length) groupOrder = sv.groupOrder.slice();
     if(Array.isArray(sv.skipGroups)) skipGroups = sv.skipGroups.slice();
     if(Array.isArray(sv.tonightIds)) tonightIds = sv.tonightIds.slice();
+    if(Array.isArray(sv.tonightRemoved)) tonightRemoved = sv.tonightRemoved.slice();
+    if(Array.isArray(sv.tonightOrder)) tonightOrder = sv.tonightOrder.slice();
     if(typeof sv.planBudgetSec === "number") planBudgetSec = sv.planBudgetSec;
     if(sv.groupMeta){ for(var gm in sv.groupMeta){ GROUP_META[gm] = {name:String(sv.groupMeta[gm])}; } }
   }
@@ -779,6 +789,38 @@ function groupAloneSec(g){ /* steps + internal transitions */
   return groupStepsSec(g) + Math.max(0, g.steps.length - 1) * TRANSITION_SECONDS;
 }
 function isSkipped(gid){ return skipGroups.indexOf(gid) >= 0; }
+/* order a step list the way it will actually be performed: the board's
+   group order (groupOrder), with each group's steps in their base order.
+   This is what makes a Plan & Tiers re-rank stick for the next run. */
+function performanceSteps(list){
+  var baseIdx = {};
+  steps.forEach(function(s, i){ baseIdx[s.id] = i; });
+  return list.slice().sort(function(a, b){
+    var ga = groupOrder.indexOf(a.group); if(ga < 0) ga = 1000000;
+    var gb = groupOrder.indexOf(b.group); if(gb < 0) gb = 1000000;
+    if(ga !== gb) return ga - gb;
+    return (baseIdx[a.id] || 0) - (baseIdx[b.id] || 0);
+  });
+}
+/* tonight-only edits: never touch the saved plan (no groupOrder, tier,
+   skip, or delete changes). They clear when the routine finishes or the
+   user taps “Full routine instead”, so a tonight removal can never
+   become a permanent deletion. */
+function clearTonightCustom(){ tonightRemoved = []; tonightOrder = []; }
+function applyTonightCustom(base){
+  var removed = {};
+  tonightRemoved.forEach(function(id){ removed[id] = true; });
+  var kept = base.filter(function(s){ return !removed[s.id]; });
+  if(!tonightOrder.length) return kept;
+  var pos = {};
+  tonightOrder.forEach(function(id, i){ pos[id] = i; });
+  var first = [], rest = [];
+  kept.forEach(function(s){
+    if(Object.prototype.hasOwnProperty.call(pos, s.id)) first.push(s); else rest.push(s);
+  });
+  first.sort(function(a, b){ return pos[a.id] - pos[b.id]; });
+  return first.concat(rest);
+}
 /* enabled, non-skipped groups in priority order */
 function priorityGroups(){
   var gs = groupsOf().filter(function(g){ return !isSkipped(g.id); });
@@ -795,7 +837,7 @@ function computePlan(budgetSec){
       g.steps.forEach(function(s){ pickedIds[s.id] = true; });
     }
   });
-  var orderedSteps = enabledSteps().filter(function(s){ return pickedIds[s.id]; });
+  var orderedSteps = performanceSteps(enabledSteps().filter(function(s){ return pickedIds[s.id]; }));
   var cut = groupsOf().filter(function(g){ return !isSkipped(g.id) && !picked.some(function(p){ return p.id === g.id; }); });
   var skipped = groupsOf().filter(function(g){ return isSkipped(g.id); });
   return { steps:orderedSteps, groups:picked, cut:cut, skipped:skipped,
@@ -882,12 +924,14 @@ var T = {
 
 function currentList(){
   if(tonightIds && tonightIds.length){
-    var set = {};
-    tonightIds.forEach(function(id){ set[id] = true; });
-    var list = enabledSteps().filter(function(s){ return set[s.id]; });
+    /* tonight's picks keep the order they were started in */
+    var byId = {};
+    enabledSteps().forEach(function(s){ byId[s.id] = s; });
+    var list = [];
+    tonightIds.forEach(function(id){ if(byId[id]) list.push(byId[id]); });
     if(list.length) return list;
   }
-  return enabledSteps();
+  return performanceSteps(enabledSteps());
 }
 
 function segmentDurationMs(){
@@ -979,6 +1023,11 @@ function advanceSegment(){
 
 function finishRoutine(){
   T.mode = "done"; T.running = false;
+  /* tonight's session is over: tonight-only edits expire, so anything
+     removed tonight is back next time. Loaded picks stay, so “Run it
+     again” repeats the same picks. */
+  clearTonightCustom();
+  saveState();
   cancelAnimationFrame(T.rafId);
   releaseWakeLock();
   sndDone();
@@ -1298,6 +1347,7 @@ function buildStepsEditor(){
 
 function onRoutineEdited(){
   tonightIds = null;
+  clearTonightCustom();
   saveState();
   if(T.mode !== "idle" && T.mode !== "done"){ stopToIdle(); }
   buildBoard();
@@ -1344,6 +1394,7 @@ document.getElementById("btnReset").addEventListener("click", function(){
   skipGroups = [];
   tonightIds = null;
   planBudgetSec = null;
+  clearTonightCustom();
   deletedGroups = [];
   deletedStepIds = [];
   for(var dg in DEFAULT_GROUP_NAMES){ GROUP_META[dg] = {name: DEFAULT_GROUP_NAMES[dg]}; }
@@ -1476,6 +1527,7 @@ function openStepEditor(step, sideSuffix){
       if(newName) step.name = newName + sideSuffix;
       if(typeof newCue === "string") step.cue = newCue.trim();
       tonightIds = null;
+      clearTonightCustom();
       saveState();
       buildStepsEditor();
       buildBoard();
@@ -1493,6 +1545,7 @@ function deleteGroup(gid){
   groupOrder = groupOrder.filter(function(g){ return g !== gid; });
   skipGroups = skipGroups.filter(function(g){ return g !== gid; });
   tonightIds = null;
+  clearTonightCustom();
   saveState();
   buildStepsEditor();
   buildBoard();
@@ -1512,6 +1565,7 @@ function deleteStep(id){
     delete groupTier[st.group];
   }
   tonightIds = null;
+  clearTonightCustom();
   saveState();
   buildStepsEditor();
   buildBoard();
@@ -1530,6 +1584,9 @@ function moveGroupTo(gid, tier, idx){
   byTier[tier].splice(idx, 0, gid);
   groupOrder = [];
   TIERS.forEach(function(t){ groupOrder = groupOrder.concat(byTier[t]); });
+  /* a board re-rank is the new saved order, so it outranks any
+     tonight-only ordering — but tonight's removals stand */
+  tonightOrder = [];
   saveState();
   buildBoard();
   renderPlan();
@@ -1542,6 +1599,7 @@ function nudgeGroup(gid, dir){
   if(i < 0 || j < 0 || j >= inTier.length) return;
   var a = groupOrder.indexOf(inTier[i]), b = groupOrder.indexOf(inTier[j]);
   groupOrder[a] = inTier[j]; groupOrder[b] = inTier[i];
+  tonightOrder = [];
   saveState();
   buildBoard();
   renderPlan();
@@ -1719,6 +1777,49 @@ var budgetRange = document.getElementById("budgetRange"),
     btnStartPlan = document.getElementById("btnStartPlan");
 var currentPlan = null;
 
+/* tonight's list controls: reorder or drop steps for tonight only.
+   They never touch the saved plan — removals are not deletions. */
+function moveTonightStep(id, dir){
+  var shown = currentPlan ? currentPlan.steps.slice() : [];
+  var i = -1;
+  shown.forEach(function(s, k){ if(s.id === id) i = k; });
+  var j = i + dir;
+  if(i < 0 || j < 0 || j >= shown.length) return;
+  var tmp = shown[i]; shown[i] = shown[j]; shown[j] = tmp;
+  tonightOrder = shown.map(function(s){ return s.id; });
+  tonightIds = null;
+  saveState();
+  renderPlan();
+}
+function removeTonightStep(id){
+  if(tonightRemoved.indexOf(id) < 0) tonightRemoved.push(id);
+  tonightOrder = tonightOrder.filter(function(x){ return x !== id; });
+  tonightIds = null;
+  saveState();
+  renderPlan();
+}
+function restoreTonightStep(id){
+  tonightRemoved = tonightRemoved.filter(function(x){ return x !== id; });
+  /* put it back where it sits in the base plan, not at the end */
+  var base = computePlan(planBudgetSec).steps;
+  var basePos = {};
+  base.forEach(function(s, k){ basePos[s.id] = k; });
+  var shown = currentPlan ? currentPlan.steps.slice() : [];
+  var step = null;
+  base.forEach(function(s){ if(s.id === id) step = s; });
+  if(step && basePos.hasOwnProperty(id)){
+    var at = shown.length;
+    for(var k = 0; k < shown.length; k++){
+      if(basePos.hasOwnProperty(shown[k].id) && basePos[shown[k].id] > basePos[id]){ at = k; break; }
+    }
+    shown.splice(at, 0, step);
+    tonightOrder = shown.map(function(s){ return s.id; });
+  }
+  tonightIds = null;
+  saveState();
+  renderPlan();
+}
+
 function renderPlan(){
   if(!budgetRange) return;
   var maxSec = Math.max(300, planMaxSec());
@@ -1730,21 +1831,53 @@ function renderPlan(){
   planBudgetSec = val;
   budgetLabel.textContent = fmt(val);
   var p = computePlan(val);
-  currentPlan = p;
-  budgetMeta.textContent = p.steps.length + " steps · " + p.groups.length + " exercises · " +
-    fmt(p.totalSec) + " planned · " + fmt(Math.max(0, val - p.totalSec)) + " to spare";
+  var shown = applyTonightCustom(p.steps);
+  var shownTotal = totalsFor(shown).total;
+  var shownGroups = {};
+  shown.forEach(function(s){ shownGroups[s.group] = true; });
+  currentPlan = { steps:shown, groups:p.groups, cut:p.cut, skipped:p.skipped,
+    totalSec:shownTotal, budgetSec:p.budgetSec };
+  budgetMeta.textContent = shown.length + " steps · " + Object.keys(shownGroups).length + " exercises · " +
+    fmt(shownTotal) + " planned · " + fmt(Math.max(0, val - shownTotal)) + " to spare";
   planOut.innerHTML = "";
-  if(p.steps.length){
+  if(shown.length){
     var ul = document.createElement("ol");
     ul.className = "plan-list";
-    p.steps.forEach(function(s, i){
+    shown.forEach(function(s, i){
       var li = document.createElement("li");
       var l = document.createElement("span"); l.textContent = (i + 1) + ". " + s.name;
+      var ctl = document.createElement("span"); ctl.className = "plan-ctl";
+      var up = document.createElement("button");
+      up.textContent = "▲"; up.setAttribute("aria-label", "Move " + s.name + " earlier tonight");
+      up.disabled = (i === 0);
+      up.addEventListener("click", function(){ moveTonightStep(s.id, -1); });
+      var dn = document.createElement("button");
+      dn.textContent = "▼"; dn.setAttribute("aria-label", "Move " + s.name + " later tonight");
+      dn.disabled = (i === shown.length - 1);
+      dn.addEventListener("click", function(){ moveTonightStep(s.id, 1); });
+      var del = document.createElement("button");
+      del.className = "danger"; del.textContent = "✕"; del.setAttribute("aria-label", "Remove " + s.name + " for tonight only");
+      del.addEventListener("click", function(){ removeTonightStep(s.id); });
+      ctl.appendChild(up); ctl.appendChild(dn); ctl.appendChild(del);
       var r = document.createElement("span"); r.className = "t"; r.textContent = fmt(s.seconds);
-      li.appendChild(l); li.appendChild(r);
+      li.appendChild(l); li.appendChild(ctl); li.appendChild(r);
       ul.appendChild(li);
     });
     planOut.appendChild(ul);
+    var removedHere = p.steps.filter(function(s){ return tonightRemoved.indexOf(s.id) >= 0; });
+    if(removedHere.length){
+      var rl = document.createElement("p");
+      rl.className = "removed-line";
+      rl.appendChild(document.createTextNode("Removed tonight — back next time: "));
+      removedHere.forEach(function(s){
+        var b = document.createElement("button");
+        b.textContent = "+ " + s.name;
+        b.setAttribute("aria-label", "Restore " + s.name + " to tonight's plan");
+        b.addEventListener("click", function(){ restoreTonightStep(s.id); });
+        rl.appendChild(b);
+      });
+      planOut.appendChild(rl);
+    }
   }else{
     var none = document.createElement("p");
     none.textContent = "No exercises fit — raise the budget or un-skip some exercises.";
@@ -1759,9 +1892,14 @@ function renderPlan(){
     d.textContent = parts.join(" · ");
     planOut.appendChild(d);
   }
-  planNote.textContent = tonightIds ?
-    "Tonight's picks are loaded — press Start in the Timer tab. “Full routine instead” clears them." : "";
-  btnStartPlan.disabled = !p.steps.length;
+  if(tonightIds){
+    planNote.textContent = "Tonight's picks are loaded — press Start in the Timer tab. “Full routine instead” clears them.";
+  }else if(tonightRemoved.length || tonightOrder.length){
+    planNote.textContent = "Tonight-only edits — your saved plan is untouched. They clear when the routine finishes or you tap “Full routine instead”.";
+  }else{
+    planNote.textContent = "";
+  }
+  btnStartPlan.disabled = !shown.length;
 }
 
 budgetRange.addEventListener("input", function(){
@@ -1781,6 +1919,7 @@ btnStartPlan.addEventListener("click", function(){
 
 document.getElementById("btnClearPlan").addEventListener("click", function(){
   tonightIds = null;
+  clearTonightCustom();
   saveState();
   renderPlan();
   render();
