@@ -193,6 +193,7 @@
   .plan-ctl button.danger{ color:var(--danger); border-color:var(--danger); }
   .plan-ctl .drag-handle{ cursor:grab; touch-action:none; }
   .plan-list li.dragging{ opacity:.85; box-shadow:var(--shadow); position:relative; z-index:5; }
+  .plan-list li.pair-dragging{ opacity:.55; }
   .removed-line{ font-size:14px; color:var(--ink-dim); margin-top:10px; }
   .removed-line button{ margin:2px 4px 2px 0; padding:6px 10px; border-radius:999px; border:1.5px solid var(--line); background:var(--surface); color:var(--ink); font-size:13.5px; }
   .cut-line{ font-size:13.5px; color:var(--ink-dim); margin-top:10px; }
@@ -771,6 +772,56 @@ function sideOf(name){
   return "";
 }
 
+/* left/right pair helpers: a pair is two steps in the same group whose
+   names differ only by side (" — right" / " — left", or " right glute" /
+   " left glute"). Singles (Quad rolling, Butterfly, Hamstring, Chin
+   tucks) have no side and never pair. Pairs always perform back-to-back,
+   right first, so tonight's list treats a pair as one movable unit. */
+function pairBase(name){
+  return name.replace(/ — (left|right)\b/, "").replace(/ (left|right) glute\b/, "");
+}
+function pairPartnerOf(step, list){
+  var side = sideOf(step.name);
+  if(!side) return null;
+  var base = pairBase(step.name);
+  for(var i = 0; i < list.length; i++){
+    var s = list[i];
+    if(s.id !== step.id && s.group === step.group && pairBase(s.name) === base &&
+       sideOf(s.name) && sideOf(s.name) !== side) return s;
+  }
+  return null;
+}
+/* split a shown step list into blocks: each left/right pair is one block
+   (right first, by base order), everything else is a one-step block.
+   Block order follows the shown order, so flattening the blocks adjoins
+   every pair without moving anything else. Every step lands in exactly
+   one block — a step whose partner is missing or already placed falls
+   back to a one-step block rather than being dropped. */
+function pairBlocks(list){
+  var baseIdx = {};
+  steps.forEach(function(s, i){ baseIdx[s.id] = i; });
+  var used = {}, blocks = [];
+  list.forEach(function(s){
+    if(used[s.id]) return;
+    var partner = pairPartnerOf(s, list);
+    if(partner && !used[partner.id]){
+      var pair = [s, partner];
+      pair.sort(function(a, b){ return (baseIdx[a.id] || 0) - (baseIdx[b.id] || 0); });
+      blocks.push(pair);
+      used[s.id] = true; used[partner.id] = true;
+    }else{
+      blocks.push([s]);
+      used[s.id] = true;
+    }
+  });
+  return blocks;
+}
+function flattenBlocks(blocks){
+  var out = [];
+  blocks.forEach(function(b){ b.forEach(function(s){ out.push(s); }); });
+  return out;
+}
+
 /* groups in performance order, built from enabled steps */
 function groupsOf(){
   var out = [], byId = {};
@@ -813,7 +864,7 @@ function applyTonightCustom(base){
   var removed = {};
   tonightRemoved.forEach(function(id){ removed[id] = true; });
   var kept = base.filter(function(s){ return !removed[s.id]; });
-  if(!tonightOrder.length) return kept;
+  if(!tonightOrder.length) return flattenBlocks(pairBlocks(kept));
   var pos = {};
   tonightOrder.forEach(function(id, i){ pos[id] = i; });
   var first = [], rest = [];
@@ -821,7 +872,9 @@ function applyTonightCustom(base){
     if(Object.prototype.hasOwnProperty.call(pos, s.id)) first.push(s); else rest.push(s);
   });
   first.sort(function(a, b){ return pos[a.id] - pos[b.id]; });
-  return first.concat(rest);
+  /* pairs stay together back-to-back (right first) even if a stored
+     tonight order predates pair-aware dragging */
+  return flattenBlocks(pairBlocks(first.concat(rest)));
 }
 /* enabled, non-skipped groups in priority order */
 function priorityGroups(){
@@ -1781,14 +1834,17 @@ var currentPlan = null;
 
 /* tonight's list controls: reorder or drop steps for tonight only.
    They never touch the saved plan — removals are not deletions. */
+/* tonight's list arrows: move a whole block (a left/right pair, or a
+   single) one block earlier/later — never one member of a pair alone. */
 function moveTonightStep(id, dir){
   var shown = currentPlan ? currentPlan.steps.slice() : [];
-  var i = -1;
-  shown.forEach(function(s, k){ if(s.id === id) i = k; });
-  var j = i + dir;
-  if(i < 0 || j < 0 || j >= shown.length) return;
-  var tmp = shown[i]; shown[i] = shown[j]; shown[j] = tmp;
-  tonightOrder = shown.map(function(s){ return s.id; });
+  var blocks = pairBlocks(shown);
+  var bi = -1;
+  blocks.forEach(function(b, k){ if(b.some(function(s){ return s.id === id; })) bi = k; });
+  var j = bi + dir;
+  if(bi < 0 || j < 0 || j >= blocks.length) return;
+  var tmp = blocks[bi]; blocks[bi] = blocks[j]; blocks[j] = tmp;
+  tonightOrder = flattenBlocks(blocks).map(function(s){ return s.id; });
   tonightIds = null;
   saveState();
   renderPlan();
@@ -1801,16 +1857,27 @@ function removeTonightStep(id){
   renderPlan();
 }
 /* drag a tonight row by its handle to reorder tonight only — same
-   pointer-based pattern as the board, so it works with touch. Dropping
-   only rewrites tonightOrder; the saved plan is untouched. */
+   pointer-based pattern as the board, so it works with touch. A row that
+   belongs to a left/right pair drags the whole pair, and the drop
+   position snaps to pair boundaries, so a pair can never be split.
+   Dropping only rewrites tonightOrder; the saved plan is untouched. */
 function attachTonightDrag(handle, li, id){
   handle.addEventListener("pointerdown", function(e){
     e.preventDefault();
     var shown = currentPlan ? currentPlan.steps.slice() : [];
-    var fromIdx = -1;
-    shown.forEach(function(s, k){ if(s.id === id) fromIdx = k; });
-    if(fromIdx < 0) return;
-    var startY = e.clientY, lastY = e.clientY, targetIdx = -1;
+    var blocks = pairBlocks(shown);
+    var fromBlock = -1, dragged = null;
+    blocks.forEach(function(b, k){
+      if(b.some(function(s){ return s.id === id; })){ fromBlock = k; dragged = b; }
+    });
+    if(fromBlock < 0) return;
+    var rows = planOut.querySelectorAll(".plan-list li");
+    /* dim the pair partner row(s) so the whole unit reads as dragged */
+    dragged.forEach(function(s){
+      if(s.id === id) return;
+      shown.forEach(function(x, k){ if(x.id === s.id && rows[k]) rows[k].classList.add("pair-dragging"); });
+    });
+    var startY = e.clientY, lastY = e.clientY, targetBlock = -1;
     li.classList.add("dragging");
     li.style.pointerEvents = "none";
     try{ handle.setPointerCapture(e.pointerId); }catch(err){}
@@ -1819,16 +1886,30 @@ function attachTonightDrag(handle, li, id){
       li.style.transform = "translateY(" + (ev.clientY - startY) + "px)";
       var t = document.elementFromPoint(ev.clientX, ev.clientY);
       var row = (t && t.closest) ? t.closest(".plan-list li") : null;
-      if(row){
-        var rows = planOut.querySelectorAll(".plan-list li");
-        for(var k = 0; k < rows.length; k++){
-          if(rows[k] === row){
-            var r = rows[k].getBoundingClientRect();
-            targetIdx = (lastY > r.top + r.height / 2) ? k + 1 : k;
-            break;
-          }
-        }
+      if(!row){ targetBlock = -1; return; }
+      var hoverIdx = -1;
+      for(var k = 0; k < rows.length; k++){
+        if(rows[k] === row){ hoverIdx = k; break; }
       }
+      if(hoverIdx < 0){ targetBlock = -1; return; }
+      var hoverStep = shown[hoverIdx], hb = -1;
+      for(var b = 0; b < blocks.length; b++){
+        if(blocks[b].some(function(s){ return s.id === hoverStep.id; })){ hb = b; break; }
+      }
+      if(hb < 0){ targetBlock = -1; return; }
+      /* drop position snaps to block boundaries: the pointer's position
+         against the whole hovered block decides before/after it, so a drop
+         can never land between a pair's two members */
+      var firstIdx = -1, lastIdx = -1;
+      shown.forEach(function(s, k){
+        if(blocks[hb].some(function(x){ return x.id === s.id; })){
+          if(firstIdx < 0) firstIdx = k;
+          lastIdx = k;
+        }
+      });
+      var top = rows[firstIdx].getBoundingClientRect().top;
+      var bottom = rows[lastIdx].getBoundingClientRect().bottom;
+      targetBlock = (lastY > (top + bottom) / 2) ? hb + 1 : hb;
     }
     function up(){
       handle.removeEventListener("pointermove", move);
@@ -1837,14 +1918,18 @@ function attachTonightDrag(handle, li, id){
       li.classList.remove("dragging");
       li.style.transform = "";
       li.style.pointerEvents = "";
-      if(targetIdx >= 0){
-        var item = shown.splice(fromIdx, 1)[0];
-        var at = targetIdx;
-        if(at > fromIdx) at--;
+      dragged.forEach(function(s){
+        if(s.id === id) return;
+        shown.forEach(function(x, k){ if(x.id === s.id && rows[k]) rows[k].classList.remove("pair-dragging"); });
+      });
+      if(targetBlock >= 0){
+        var blk = blocks.splice(fromBlock, 1)[0];
+        var at = targetBlock;
+        if(at > fromBlock) at--;
         if(at < 0) at = 0;
-        if(at > shown.length) at = shown.length;
-        shown.splice(at, 0, item);
-        tonightOrder = shown.map(function(s){ return s.id; });
+        if(at > blocks.length) at = blocks.length;
+        blocks.splice(at, 0, blk);
+        tonightOrder = flattenBlocks(blocks).map(function(s){ return s.id; });
         tonightIds = null;
         saveState();
         renderPlan();
@@ -1889,6 +1974,10 @@ function renderPlan(){
   budgetLabel.textContent = fmt(val);
   var p = computePlan(val);
   var shown = applyTonightCustom(p.steps);
+  /* block index per step, for pair-aware arrow states below */
+  var shownBlocks = pairBlocks(shown);
+  var blockOf = {};
+  shownBlocks.forEach(function(b, k){ b.forEach(function(s){ blockOf[s.id] = k; }); });
   var shownTotal = totalsFor(shown).total;
   var shownGroups = {};
   shown.forEach(function(s){ shownGroups[s.group] = true; });
@@ -1904,17 +1993,19 @@ function renderPlan(){
       var li = document.createElement("li");
       var l = document.createElement("span"); l.textContent = (i + 1) + ". " + s.name;
       var ctl = document.createElement("span"); ctl.className = "plan-ctl";
+      /* a pair member's controls move the whole pair — label them so */
+      var dragName = pairPartnerOf(s, shown) ? pairBase(s.name) + " pair" : s.name;
       var handle = document.createElement("button");
       handle.className = "drag-handle"; handle.textContent = "⠿";
-      handle.setAttribute("aria-label", "Drag " + s.name + " to reorder tonight");
+      handle.setAttribute("aria-label", "Drag " + dragName + " to reorder tonight");
       ctl.appendChild(handle);
       var up = document.createElement("button");
-      up.textContent = "▲"; up.setAttribute("aria-label", "Move " + s.name + " earlier tonight");
-      up.disabled = (i === 0);
+      up.textContent = "▲"; up.setAttribute("aria-label", "Move " + dragName + " earlier tonight");
+      up.disabled = (blockOf[s.id] === 0);
       up.addEventListener("click", function(){ moveTonightStep(s.id, -1); });
       var dn = document.createElement("button");
-      dn.textContent = "▼"; dn.setAttribute("aria-label", "Move " + s.name + " later tonight");
-      dn.disabled = (i === shown.length - 1);
+      dn.textContent = "▼"; dn.setAttribute("aria-label", "Move " + dragName + " later tonight");
+      dn.disabled = (blockOf[s.id] === shownBlocks.length - 1);
       dn.addEventListener("click", function(){ moveTonightStep(s.id, 1); });
       var del = document.createElement("button");
       del.className = "danger"; del.textContent = "✕"; del.setAttribute("aria-label", "Remove " + s.name + " for tonight only");
