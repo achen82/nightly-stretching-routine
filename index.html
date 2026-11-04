@@ -360,7 +360,7 @@
   <section id="viewPlan" class="hidden">
     <div class="card" style="margin-top:0">
       <h2>Tonight&rsquo;s time budget</h2>
-      <p>Set the time you have. The planner fills it from your top tiers down &mdash; counting each exercise&rsquo;s duration plus the 5-second transitions &mdash; and tonight&rsquo;s picks run in the board order below.</p>
+      <p>Set the time you have. The planner picks by tier, A first, counting each exercise&rsquo;s duration plus the 5-second transitions &mdash; and tonight&rsquo;s picks always run in your performance order below.</p>
       <input type="range" id="budgetRange" min="300" step="30" value="300" aria-label="Time budget in seconds">
       <div class="budget-line"><strong id="budgetLabel">5:00</strong><span id="budgetMeta"></span></div>
       <div id="planOut"></div>
@@ -372,9 +372,9 @@
     </div>
 
     <div class="card">
-      <h2>Tiers &mdash; A most important, F first to cut</h2>
-      <p>Drag a card by its handle (or use its tier menu and arrows) to re-rank. That order is the order you perform in, and it saves — so a full routine runs in your board order next time too. <strong>Skip tonight</strong> knocks an exercise out of the plan entirely, whatever the budget. A card&rsquo;s Delete button removes that exercise entirely (Reset in Steps &amp; Settings brings everything back). Tonight&rsquo;s list above has its own drag handle and ▲ ▼ ✕ controls — those edits are for tonight only: removed exercises come back next time and your saved plan is untouched.</p>
-      <div id="tierBoard"></div>
+      <h2>Performance order &mdash; drag to re-rank</h2>
+      <p>Drag a card by its handle (or use its arrows) to re-rank. This order is the order you perform in &mdash; full routine or short night &mdash; and it saves. A card&rsquo;s tier menu sets only its cut priority: on a short night the planner picks by tier, A first (A essential, F first to cut), and whatever it picks still runs in this order. Tiers never move a card; dragging never changes a tier. <strong>Skip tonight</strong> knocks an exercise out of the plan entirely, whatever the budget. A card&rsquo;s Delete button removes that exercise entirely (Reset in Steps &amp; Settings brings everything back). Tonight&rsquo;s list above has its own drag handle and ▲ ▼ ✕ controls — those edits are for tonight only: removed exercises come back next time and your saved plan is untouched.</p>
+      <div id="orderBoard"></div>
     </div>
 
     <div class="card">
@@ -505,10 +505,10 @@ var DEFAULT_GROUP_TIER = {
   "g-bentcalf":"D", "g-chest":"E", "g-neck":"F", "g-chin":"F"
 };
 /* global priority order: tier A first (in listed order), then B, ... */
-var DEFAULT_GROUP_ORDER = ["g-glute","g-couch","g-fig4",
-  "g-calf","g-backcalf","g-itband","g-hamstring","g-straightcalf",
-  "g-quad","g-pretzel","g-butterfly","g-neckknot",
-  "g-bentcalf","g-chest","g-neck","g-chin"];
+var DEFAULT_GROUP_ORDER = ["g-calf","g-backcalf","g-quad","g-itband",
+  "g-glute","g-fig4","g-pretzel","g-butterfly","g-couch","g-hamstring",
+  "g-straightcalf","g-neckknot","g-neck","g-chest",
+  "g-bentcalf","g-chin"];
 
 /* ================= persistence (this device only) ================= */
 var LS_KEY = "nightly-stretching-v3";
@@ -529,7 +529,7 @@ var localSavedAt = 0;
 var editsSinceBoot = 0;
 function statePayload(){
   return {
-    steps:steps, prefs:prefs, groupTier:groupTier, groupOrder:groupOrder,
+    steps:steps, prefs:prefs, groupTier:groupTier, groupOrder:groupOrder, orderVersion:orderVersion,
     skipGroups:skipGroups, tonightIds:tonightIds, planBudgetSec:planBudgetSec, tonightRemoved:tonightRemoved, tonightOrder:tonightOrder, groupMeta:customMeta(), deletedGroups:deletedGroups, deletedStepIds:deletedStepIds,
     savedAt:localSavedAt
   };
@@ -632,7 +632,8 @@ function applyServerState(rec){
     try{ localStorage.setItem(LS_KEY, JSON.stringify(rec.state)); }catch(e){}
   }
   localSavedAt = rec.savedAt;
-  initState();
+  var mig = initState();
+  if(mig) saveState();
   buildStepsEditor();
   buildBoard();
   renderPlan();
@@ -651,7 +652,7 @@ function clampSec(v, dflt){
   return Math.max(5, Math.min(600, v));
 }
 
-var steps, prefs, groupTier, groupOrder, skipGroups, tonightIds, planBudgetSec, tonightRemoved, tonightOrder;
+var steps, prefs, groupTier, groupOrder, skipGroups, tonightIds, planBudgetSec, tonightRemoved, tonightOrder, orderVersion;
 var deletedGroups = [], deletedStepIds = [];
 
 /* Rebuild the step list from current defaults, overlaying saved per-step
@@ -693,6 +694,7 @@ function initState(){
   prefs = { sound:true, voice:true, countBeeps:true };
   groupTier = defaultGroupTier();
   groupOrder = DEFAULT_GROUP_ORDER.slice();
+  orderVersion = 0;
   skipGroups = [];
   tonightIds = null;
   tonightRemoved = [];
@@ -715,6 +717,7 @@ function initState(){
     }
     if(sv.groupTier){ for(var k in sv.groupTier){ if(TIERS.indexOf(sv.groupTier[k]) >= 0) groupTier[k] = sv.groupTier[k]; } }
     if(Array.isArray(sv.groupOrder) && sv.groupOrder.length) groupOrder = sv.groupOrder.slice();
+    if(typeof sv.orderVersion === "number") orderVersion = sv.orderVersion;
     if(Array.isArray(sv.skipGroups)) skipGroups = sv.skipGroups.slice();
     if(Array.isArray(sv.tonightIds)) tonightIds = sv.tonightIds.slice();
     if(Array.isArray(sv.tonightRemoved)) tonightRemoved = sv.tonightRemoved.slice();
@@ -749,8 +752,34 @@ function initState(){
     if(groupOrder.indexOf(s.group) < 0) groupOrder.push(s.group);
   });
   groupOrder = groupOrder.filter(function(g){ return seen[g]; });
+  /* One-time migration (v2): performance order is now independent of tiers.
+     Set the Nov 2, 2026 board order as the performance order. Tiers, skips
+     and tonight-only edits are untouched. Runs once: orderVersion persists
+     in saved state, and the caller saves when this returns true. */
+  var migrated = false;
+  if(orderVersion < 2){
+    var want = ["Calf rolling","Back of calf rollout","Quad rolling","IT band rollout",
+      "Tennis ball \u2014 glute","Figure-four stretch","Pretzel stretch","Butterfly stretch",
+      "Child's Pose","Lat Rollout","Couch stretch","Hamstring stretch",
+      "Straight-knee calf stretch","Back of neck knot","Upper-trap neck stretch",
+      "Doorway chest stretch"];
+    var byName = {};
+    groupsOf().forEach(function(g){ if(!byName[g.name]) byName[g.name] = g.id; });
+    groupsOf().forEach(function(g){
+      var base = g.name.split(" \u2014 ")[0];
+      if(!byName[base]) byName[base] = g.id;
+    });
+    var next = [];
+    want.forEach(function(n){ if(byName[n] && next.indexOf(byName[n]) < 0) next.push(byName[n]); });
+    groupOrder.forEach(function(g){ if(next.indexOf(g) < 0) next.push(g); });
+    groupOrder = next;
+    tonightOrder = [];
+    orderVersion = 2;
+    migrated = true;
+  }
+  return migrated;
 }
-initState();
+if(initState()) saveState();
 
 /* ================= derived ================= */
 function enabledSteps(){ return steps.filter(function(s){ return s.enabled; }); }
@@ -876,13 +905,21 @@ function applyTonightCustom(base){
      tonight order predates pair-aware dragging */
   return flattenBlocks(pairBlocks(first.concat(rest)));
 }
-/* enabled, non-skipped groups in priority order */
+/* enabled, non-skipped groups in cut priority: tier first (A..F),
+   performance order within a tier. Tiers decide WHAT survives a short
+   night; groupOrder alone decides the order everything performs in. */
 function priorityGroups(){
   var gs = groupsOf().filter(function(g){ return !isSkipped(g.id); });
-  gs.sort(function(a,b){ return groupOrder.indexOf(a.id) - groupOrder.indexOf(b.id); });
+  gs.sort(function(a,b){
+    var ta = TIERS.indexOf(a.tier || "C"), tb = TIERS.indexOf(b.tier || "C");
+    if(ta !== tb) return ta - tb;
+    return groupOrder.indexOf(a.id) - groupOrder.indexOf(b.id);
+  });
   return gs;
 }
-/* greedy fill: walk priority order, take a group if its marginal cost fits */
+/* greedy fill: walk cut priority, take a group if its marginal cost fits.
+   Picked steps are then ordered by performanceSteps (groupOrder), so a
+   short night performs its survivors in the same order as a full night. */
 function computePlan(budgetSec){
   var picked = [], pickedIds = {}, usedSteps = 0, usedSec = 0;
   priorityGroups().forEach(function(g){
@@ -1628,19 +1665,16 @@ function deleteStep(id){
   render();
 }
 
-var tierBoard = document.getElementById("tierBoard");
+var orderBoard = document.getElementById("orderBoard");
 
-function moveGroupTo(gid, tier, idx){
-  groupTier[gid] = tier;
+/* Board re-rank: performance order only. Never touches tiers. A board
+   re-rank is the new saved order, so it outranks any tonight-only
+   ordering — but tonight's removals stand. */
+function moveGroup(gid, idx){
   var rest = groupOrder.filter(function(g){ return g !== gid; });
-  var byTier = {};
-  TIERS.forEach(function(t){ byTier[t] = rest.filter(function(g){ return (groupTier[g] || "C") === t; }); });
-  idx = Math.max(0, Math.min(idx, byTier[tier].length));
-  byTier[tier].splice(idx, 0, gid);
-  groupOrder = [];
-  TIERS.forEach(function(t){ groupOrder = groupOrder.concat(byTier[t]); });
-  /* a board re-rank is the new saved order, so it outranks any
-     tonight-only ordering — but tonight's removals stand */
+  idx = Math.max(0, Math.min(idx, rest.length));
+  rest.splice(idx, 0, gid);
+  groupOrder = rest;
   tonightOrder = [];
   saveState();
   buildBoard();
@@ -1648,12 +1682,9 @@ function moveGroupTo(gid, tier, idx){
 }
 
 function nudgeGroup(gid, dir){
-  var tier = groupTier[gid] || "C";
-  var inTier = groupOrder.filter(function(g){ return (groupTier[g] || "C") === tier; });
-  var i = inTier.indexOf(gid), j = i + dir;
-  if(i < 0 || j < 0 || j >= inTier.length) return;
-  var a = groupOrder.indexOf(inTier[i]), b = groupOrder.indexOf(inTier[j]);
-  groupOrder[a] = inTier[j]; groupOrder[b] = inTier[i];
+  var i = groupOrder.indexOf(gid), j = i + dir;
+  if(i < 0 || j < 0 || j >= groupOrder.length) return;
+  var tmp = groupOrder[i]; groupOrder[i] = groupOrder[j]; groupOrder[j] = tmp;
   tonightOrder = [];
   saveState();
   buildBoard();
@@ -1663,18 +1694,13 @@ function nudgeGroup(gid, dir){
 function attachDrag(handle, card, gid){
   handle.addEventListener("pointerdown", function(e){
     e.preventDefault();
-    var startY = e.clientY, lastY = e.clientY, hoverRow = null;
+    var startY = e.clientY, lastY = e.clientY;
     card.classList.add("dragging");
     card.style.pointerEvents = "none";
     try{ handle.setPointerCapture(e.pointerId); }catch(err){}
     function move(ev){
       lastY = ev.clientY;
       card.style.transform = "translateY(" + (ev.clientY - startY) + "px)";
-      var t = document.elementFromPoint(ev.clientX, ev.clientY);
-      var row = (t && t.closest) ? t.closest(".tier-row") : null;
-      if(hoverRow && hoverRow !== row) hoverRow.classList.remove("drop-hint");
-      hoverRow = row;
-      if(hoverRow) hoverRow.classList.add("drop-hint");
     }
     function up(){
       handle.removeEventListener("pointermove", move);
@@ -1683,18 +1709,14 @@ function attachDrag(handle, card, gid){
       card.classList.remove("dragging");
       card.style.transform = "";
       card.style.pointerEvents = "";
-      if(hoverRow){
-        hoverRow.classList.remove("drop-hint");
-        var targetTier = hoverRow.getAttribute("data-tier");
-        var cards = hoverRow.querySelectorAll(".gcard");
-        var idx = 0;
-        for(var i = 0; i < cards.length; i++){
-          if(cards[i] === card) continue;
-          var r = cards[i].getBoundingClientRect();
-          if(lastY > r.top + r.height / 2) idx++;
-        }
-        moveGroupTo(gid, targetTier, idx);
+      var cards = orderBoard.querySelectorAll(".gcard");
+      var idx = 0;
+      for(var i = 0; i < cards.length; i++){
+        if(cards[i] === card) continue;
+        var r = cards[i].getBoundingClientRect();
+        if(lastY > r.top + r.height / 2) idx++;
       }
+      moveGroup(gid, idx);
     }
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", up);
@@ -1719,7 +1741,7 @@ function groupCard(g){
 
   var handle = document.createElement("button");
   handle.className = "drag-handle"; handle.textContent = "⠿";
-  handle.setAttribute("aria-label", "Drag " + g.name + " to another tier");
+  handle.setAttribute("aria-label", "Drag " + g.name + " to reorder");
   ctl.appendChild(handle);
 
   var sel = document.createElement("select");
@@ -1731,16 +1753,19 @@ function groupCard(g){
     sel.appendChild(o);
   });
   sel.addEventListener("change", function(){
-    var count = groupsOf().filter(function(x){ return x.tier === sel.value; }).length;
-    moveGroupTo(g.id, sel.value, count);
+    /* tier only: cut priority for short nights. Never moves the card. */
+    groupTier[g.id] = sel.value;
+    saveState();
+    buildBoard();
+    renderPlan();
   });
   ctl.appendChild(sel);
 
   var up = document.createElement("button");
-  up.textContent = "▲"; up.setAttribute("aria-label", "Move " + g.name + " up in its tier");
+  up.textContent = "▲"; up.setAttribute("aria-label", "Move " + g.name + " earlier in performance order");
   up.addEventListener("click", function(){ nudgeGroup(g.id, -1); });
   var dn = document.createElement("button");
-  dn.textContent = "▼"; dn.setAttribute("aria-label", "Move " + g.name + " down in its tier");
+  dn.textContent = "▼"; dn.setAttribute("aria-label", "Move " + g.name + " later in performance order");
   dn.addEventListener("click", function(){ nudgeGroup(g.id, 1); });
   ctl.appendChild(up); ctl.appendChild(dn);
 
@@ -1796,31 +1821,11 @@ function groupCard(g){
 }
 
 function buildBoard(){
-  if(!tierBoard) return;
-  tierBoard.innerHTML = "";
+  if(!orderBoard) return;
+  orderBoard.innerHTML = "";
   var all = groupsOf();
-  TIERS.forEach(function(tier){
-    var row = document.createElement("div");
-    row.className = "tier-row"; row.setAttribute("data-tier", tier);
-    var head = document.createElement("div");
-    head.className = "tier-head";
-    var badge = document.createElement("span");
-    badge.className = "tier-badge t" + tier; badge.textContent = tier;
-    var sub = document.createElement("span");
-    sub.className = "tier-sub"; sub.textContent = TIER_SUB[tier];
-    head.appendChild(badge); head.appendChild(sub);
-    row.appendChild(head);
-    var gs = all.filter(function(g){ return g.tier === tier; });
-    gs.sort(function(a,b){ return groupOrder.indexOf(a.id) - groupOrder.indexOf(b.id); });
-    if(!gs.length){
-      var e = document.createElement("div");
-      e.className = "tier-empty";
-      e.textContent = "Nothing here — drag a card in or use its tier menu.";
-      row.appendChild(e);
-    }
-    gs.forEach(function(g){ row.appendChild(groupCard(g)); });
-    tierBoard.appendChild(row);
-  });
+  all.sort(function(a,b){ return groupOrder.indexOf(a.id) - groupOrder.indexOf(b.id); });
+  all.forEach(function(g){ orderBoard.appendChild(groupCard(g)); });
 }
 
 /* ---------- planner ---------- */
@@ -2091,11 +2096,8 @@ document.getElementById("btnAddExercise").addEventListener("click", function(){
   var gid = "u" + Date.now().toString(36);
   GROUP_META[gid] = {name:name};
   groupTier[gid] = tier;
-  var rank = TIERS.indexOf(tier);
-  var insertAt = groupOrder.length;
-  for(var i = 0; i < groupOrder.length; i++){
-    if(TIERS.indexOf(groupTier[groupOrder[i]] || "C") > rank){ insertAt = i; break; }
-  }
+  /* new exercises go last in performance order until dragged; tier only
+     sets their cut priority */
   var fresh = [];
   if(sides === "pair"){
     fresh.push({id:gid + "-r", group:gid, phase:phase, name:name + " — right", seconds:secs, cue:"Custom exercise.", enabled:true});
@@ -2108,7 +2110,7 @@ document.getElementById("btnAddExercise").addEventListener("click", function(){
     if(steps[j].phase === phase){ at = j + 1; break; }
   }
   steps.splice.apply(steps, [at, 0].concat(fresh));
-  groupOrder.splice(insertAt, 0, gid);
+  groupOrder.push(gid);
   tonightIds = null;
   saveState();
   buildStepsEditor();

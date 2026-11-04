@@ -3,9 +3,10 @@
 A mobile-first stretching timer web app: a 30-step nightly routine
 (19:10 total — 16:45 of stretching plus 29 × 5-second transitions), with a
 large countdown, audible cues, and editable steps. Includes a Plan & Tiers
-tab: rank exercises in tiers A (most important) to F, drag the time slider
-(5:00 up to the full routine, 30-second steps) and the app builds tonight's
-routine from your top tiers; skip exercises for the night, and add your own
+tab: drag exercises into a performance order, assign tiers A (most important)
+to F as cut priority, drag the time slider (5:00 up to the full routine,
+30-second steps) and the app builds tonight's routine by tier while keeping
+your performance order; skip exercises for the night, and add your own
 exercises with custom durations (30 seconds by default). The app itself is
 one self-contained `index.html` file — no build step, no dependencies —
 plus a tiny companion service that stores your data (see below).
