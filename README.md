@@ -7,7 +7,10 @@ tab: drag exercises into a performance order, assign tiers A (most important)
 to F as cut priority, drag the time slider (5:00 up to the full routine,
 30-second steps) and the app builds tonight's routine by tier while keeping
 your performance order; skip exercises for the night, and add your own
-exercises with custom durations (30 seconds by default). The app itself is
+exercises with custom durations (30 seconds by default). A "Turn off neck
+exercises" button switches off both neck stretches at once (Back of neck
+knot and Upper-trap neck stretch) for when they are done beforehand; it
+toggles back on the same way. The app itself is
 one self-contained `index.html` file — no build step, no dependencies —
 plus a tiny companion service that stores your data (see below).
 

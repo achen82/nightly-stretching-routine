@@ -374,6 +374,10 @@
     <div class="card">
       <h2>Performance order &mdash; drag to re-rank</h2>
       <p>Drag a card by its handle (or use its arrows) to re-rank. This order is the order you perform in &mdash; full routine or short night &mdash; and it saves. A card&rsquo;s tier menu sets only its cut priority: on a short night the planner picks by tier, A first (A essential, F first to cut), and whatever it picks still runs in this order. Tiers never move a card; dragging never changes a tier. <strong>Skip tonight</strong> knocks an exercise out of the plan entirely, whatever the budget. A card&rsquo;s Delete button removes that exercise entirely (Reset in Steps &amp; Settings brings everything back). Tonight&rsquo;s list above has its own drag handle and ▲ ▼ ✕ controls — those edits are for tonight only: removed exercises come back next time and your saved plan is untouched.</p>
+      <div class="btn-row">
+        <button id="btnNeckToggle" aria-pressed="false">Turn off neck exercises</button>
+      </div>
+      <p id="neckToggleNote">Turns off Back of neck knot and Upper-trap neck stretch — the two neck stretches you do before the routine.</p>
       <div id="orderBoard"></div>
     </div>
 
@@ -887,6 +891,44 @@ function groupAloneSec(g){ /* steps + internal transitions */
   return groupStepsSec(g) + Math.max(0, g.steps.length - 1) * TRANSITION_SECONDS;
 }
 function isSkipped(gid){ return skipGroups.indexOf(gid) >= 0; }
+/* The two neck stretches Aaron does before the routine: Back of neck
+   knot (g-neckknot) and Upper-trap neck stretch (g-neck) — the stretch
+   right after it in performance order. The Plan & Tiers toggle switches
+   both in/out of the plan together, using the same skipGroups mechanism
+   as a card's Skip button, so the choice persists like any other skip
+   and the exercises stay on the board (shown as Skipped) instead of
+   being deleted. Chin tucks (g-chin) is a separate exercise and is NOT
+   part of this toggle. */
+var NECK_GROUPS = ["g-neckknot", "g-neck"];
+function neckExercisesOff(){
+  return NECK_GROUPS.every(function(gid){ return isSkipped(gid); });
+}
+function refreshNeckToggle(){
+  var btn = document.getElementById("btnNeckToggle");
+  var note = document.getElementById("neckToggleNote");
+  if(!btn) return;
+  var off = neckExercisesOff();
+  btn.textContent = off ? "Turn on neck exercises" : "Turn off neck exercises";
+  btn.setAttribute("aria-pressed", off ? "true" : "false");
+  if(note) note.textContent = off
+    ? "Neck exercises are off — Back of neck knot and Upper-trap neck stretch are excluded from the plan. (Chin tucks is a separate exercise and stays on.)"
+    : "Turns off Back of neck knot and Upper-trap neck stretch — the two neck stretches you do before the routine.";
+}
+function toggleNeckExercises(){
+  var off = neckExercisesOff();
+  var present = {};
+  groupsOf().forEach(function(g){ present[g.id] = true; });
+  NECK_GROUPS.forEach(function(gid){
+    if(!present[gid]) return; /* a deleted exercise is never re-skipped */
+    var i = skipGroups.indexOf(gid);
+    if(off){ if(i >= 0) skipGroups.splice(i, 1); }
+    else if(i < 0){ skipGroups.push(gid); }
+  });
+  saveState();
+  buildBoard();
+  renderPlan();
+  refreshNeckToggle();
+}
 /* order a step list the way it will actually be performed: the board's
    group order (groupOrder), with each group's steps in their base order.
    This is what makes a Plan & Tiers re-rank stick for the next run. */
@@ -1842,6 +1884,7 @@ function buildBoard(){
   var all = groupsOf();
   all.sort(function(a,b){ return groupOrder.indexOf(a.id) - groupOrder.indexOf(b.id); });
   all.forEach(function(g){ orderBoard.appendChild(groupCard(g)); });
+  refreshNeckToggle();
 }
 
 /* ---------- planner ---------- */
@@ -2136,6 +2179,9 @@ document.getElementById("btnAddExercise").addEventListener("click", function(){
   nameEl.value = "";
   note.textContent = "Added “" + name + "” to Tier " + tier + " — drag it anywhere on the board.";
 });
+
+/* ---------- neck exercises toggle ---------- */
+document.getElementById("btnNeckToggle").addEventListener("click", toggleNeckExercises);
 
 /* ================= init ================= */
 buildStepsEditor();
