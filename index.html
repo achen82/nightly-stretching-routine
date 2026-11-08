@@ -758,6 +758,22 @@ function initState(){
      in saved state, and the caller saves when this returns true. */
   var migrated = false;
   if(orderVersion < 2){
+    /* Guard: only apply the Nov 2 order when the saved order is still
+       tier-sorted (never deliberately reordered). A save from a device
+       still running pre-v2 code carries no orderVersion, so without this
+       guard pulling such a record would reset a deliberate reorder back
+       to the Nov 2 list. A custom order is kept as-is; either way the
+       version is stamped so this runs once. */
+    var tierSorted = [];
+    TIERS.forEach(function(t){
+      groupOrder.forEach(function(g){ if((groupTier[g] || "C") === t) tierSorted.push(g); });
+    });
+    var isTierSorted = tierSorted.length === groupOrder.length &&
+      tierSorted.every(function(g, i){ return groupOrder[i] === g; });
+    if(!isTierSorted){
+      orderVersion = 2;
+      return true;
+    }
     var want = ["Calf rolling","Back of calf rollout","Quad rolling","IT band rollout",
       "Tennis ball \u2014 glute","Figure-four stretch","Pretzel stretch","Butterfly stretch",
       "Child's Pose","Lat Rollout","Couch stretch","Hamstring stretch",
