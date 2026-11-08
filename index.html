@@ -358,6 +358,10 @@
 
   <!-- ============ PLAN & TIERS VIEW ============ -->
   <section id="viewPlan" class="hidden">
+    <div class="btn-row" style="margin-top:0">
+      <button id="btnNeckToggle" aria-pressed="false">Turn off neck exercises</button>
+    </div>
+    <p id="neckToggleNote">Turns off Back of neck knot and Upper-trap neck stretch — the two neck stretches you do before the routine.</p>
     <div class="card" style="margin-top:0">
       <h2>Tonight&rsquo;s time budget</h2>
       <p>Set the time you have. The planner picks by tier, A first, counting each exercise&rsquo;s duration plus the 5-second transitions &mdash; and tonight&rsquo;s picks always run in your performance order below.</p>
@@ -374,10 +378,6 @@
     <div class="card">
       <h2>Performance order &mdash; drag to re-rank</h2>
       <p>Drag a card by its handle (or use its arrows) to re-rank. This order is the order you perform in &mdash; full routine or short night &mdash; and it saves. A card&rsquo;s tier menu sets only its cut priority: on a short night the planner picks by tier, A first (A essential, F first to cut), and whatever it picks still runs in this order. Tiers never move a card; dragging never changes a tier. <strong>Skip tonight</strong> knocks an exercise out of the plan entirely, whatever the budget. A card&rsquo;s Delete button removes that exercise entirely (Reset in Steps &amp; Settings brings everything back). Tonight&rsquo;s list above has its own drag handle and ▲ ▼ ✕ controls — those edits are for tonight only: removed exercises come back next time and your saved plan is untouched.</p>
-      <div class="btn-row">
-        <button id="btnNeckToggle" aria-pressed="false">Turn off neck exercises</button>
-      </div>
-      <p id="neckToggleNote">Turns off Back of neck knot and Upper-trap neck stretch — the two neck stretches you do before the routine.</p>
       <div id="orderBoard"></div>
     </div>
 
